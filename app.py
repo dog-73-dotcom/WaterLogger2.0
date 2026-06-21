@@ -280,6 +280,33 @@ def get_unlocked_badges(stats):
     return [b for b in BADGES if b["check"](stats)]
 
 
+RANKS = [
+    (0, "Iron"), (3, "Bronze"), (7, "Silver"), (14, "Gold"),
+    (21, "Platinum"), (30, "Diamond"), (45, "Ascendant"),
+    (60, "Immortal"), (90, "Radiant"),
+]
+
+
+def get_rank(streak_days):
+    rank = RANKS[0][1]
+    for threshold, name in RANKS:
+        if streak_days >= threshold:
+            rank = name
+    return rank
+
+
+def get_hud_status(total_today, goal):
+    pct = total_today / goal if goal else 0
+    if pct >= 1:
+        return "🟢", "OPTIMAL", "All systems hydrated."
+    elif pct >= 0.5:
+        return "🟡", "STABLE", "Holding the line. Keep going."
+    elif pct >= 0.2:
+        return "🟠", "LOW", "Hydration dropping. Resupply soon."
+    else:
+        return "🔴", "CRITICAL", "Reaper Leviathan Approaching. Drink water now."
+
+
 def get_week_avg(df, weeks_ago=0):
     """Average daily ml for a given week (0 = this week, 1 = last week), Monday-start."""
     today = date.today()
@@ -315,6 +342,8 @@ if "refresh" not in st.session_state:
 # ---------- THEME: red / black / jasmine ----------
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cormorant+Garamond:ital@1&display=swap');
+
 :root {
     --jw-red: #B3001B;
     --jw-red-bright: #FF4655;
@@ -323,8 +352,16 @@ st.markdown("""
     --jw-jasmine: #FFF6E0;
 }
 
+html, body, [class*="css"] {
+    font-family: 'Rajdhani', sans-serif !important;
+}
+
 [data-testid="stAppViewContainer"] {
     background-color: var(--jw-black);
+    background-image:
+        radial-gradient(circle at 15% 20%, rgba(179,0,27,0.10) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(179,0,27,0.08) 0%, transparent 45%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 2px, transparent 14px);
 }
 [data-testid="stHeader"] {
     background-color: rgba(0,0,0,0);
@@ -334,7 +371,13 @@ st.markdown("""
     border-right: 1px solid var(--jw-red);
 }
 
-h1, h2, h3, h4, .stMarkdown p {
+h1, h2, h3, h4 {
+    color: var(--jw-jasmine) !important;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-weight: 700 !important;
+}
+.stMarkdown p, label, span {
     color: var(--jw-jasmine) !important;
 }
 
@@ -347,12 +390,22 @@ div.stButton > button {
     color: var(--jw-jasmine);
     border: 1px solid var(--jw-red-bright);
     border-radius: 6px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 div.stButton > button:hover {
     background-color: var(--jw-red-bright);
     color: var(--jw-black);
     border: 1px solid var(--jw-jasmine);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 0 rgba(0,0,0,0.5);
+}
+div.stButton > button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.5);
 }
 
 .custom-box {
@@ -362,6 +415,10 @@ div.stButton > button:hover {
     border-radius: 8px;
     margin-top: 8px;
     border-left: 4px solid var(--jw-red-bright);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 16px;
 }
 
 .streak-box {
@@ -371,10 +428,35 @@ div.stButton > button:hover {
     border-radius: 10px;
     border: 1px solid var(--jw-red-bright);
     margin-bottom: 10px;
+    box-shadow: 0 6px 16px rgba(179,0,27,0.35);
 }
 .streak-box .big {
     font-size: 28px;
     font-weight: 700;
+}
+
+.rank-tag {
+    display: inline-block;
+    background-color: var(--jw-black);
+    color: var(--jw-red-bright);
+    border: 1px solid var(--jw-red-bright);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-left: 4px;
+}
+
+.hud-banner {
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin: 10px 0 16px 0;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    border: 1px solid;
 }
 
 .badge-locked {
@@ -388,6 +470,12 @@ div.stButton > button:hover {
     padding: 10px;
     text-align: center;
     margin-bottom: 6px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.badge-card:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 8px 18px rgba(255,70,85,0.25);
 }
 .badge-card .icon {
     font-size: 26px;
@@ -395,31 +483,39 @@ div.stButton > button:hover {
 .badge-card .name {
     color: var(--jw-jasmine);
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
 }
 .badge-card .desc {
     color: #c9c0a8;
     font-size: 11px;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
 }
 
 [data-testid="stProgress"] > div > div {
     background-color: var(--jw-red-bright) !important;
 }
+
+hr {
+    border-color: rgba(255,70,85,0.25) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------- UI ----------
-st.markdown("""
-<div style="display:flex; align-items:center; gap:12px;">
-  <div style="font-size:28px;">🌺💧</div>
-  <div style="font-size:30px; font-weight:700; color:#FFF6E0;">WaterYouDoing</div>
-</div>
-""", unsafe_allow_html=True)
-
 # Init + load
 init_db()
 data = load_data()
 stats = get_stats(data)
+current_rank = get_rank(stats["current_streak"])
+
+st.markdown(f"""
+<div style="display:flex; align-items:center; gap:12px;">
+  <div style="font-size:28px;">🌺💧</div>
+  <div style="font-size:30px; font-weight:700; color:#FFF6E0;">WaterYouDoing</div>
+  <span class="rank-tag">{current_rank}</span>
+</div>
+""", unsafe_allow_html=True)
 
 # Birthday easter egg
 today_now = date.today()
@@ -438,6 +534,22 @@ with st.sidebar:
     st.markdown("---")
     st.write("Theme:")
     theme_choice = st.radio("", ["Funny & chaotic", "Minimal & calm"], index=0)
+
+# HUD status banner — reflects today's hydration before any column split
+_today_total_for_hud = get_daily_total(data, date.today())
+_emoji, _label, _subtext = get_hud_status(_today_total_for_hud, DAILY_GOAL)
+_hud_colors = {
+    "OPTIMAL": ("#1f4d2b", "#3ddc6f"),
+    "STABLE": ("#4d4319", "#ffd23d"),
+    "LOW": ("#4d2c12", "#ff9d3d"),
+    "CRITICAL": ("#4d1119", "#ff4655"),
+}
+_bg, _border = _hud_colors[_label]
+st.markdown(f"""
+<div class="hud-banner" style="background-color:{_bg}; border-color:{_border}; color:{_border};">
+    {_emoji} STATUS: {_label} — {_subtext}
+</div>
+""", unsafe_allow_html=True)
 
 # Streak banner
 streak_cols = st.columns(2)
@@ -462,7 +574,7 @@ col1, col2 = st.columns([1.5, 1])
 
 # ---------- LEFT COLUMN ----------
 with col1:
-    st.subheader("Add water intake")
+    st.subheader("🔫 Buy Phase — Stock Up")
 
     quick_amounts = [250, 500]
     quick_cols = st.columns(len(quick_amounts))
@@ -488,7 +600,7 @@ with col1:
 
     st.markdown("---")
 
-    st.subheader(f"Logs for {view_date.isoformat()}")
+    st.subheader(f"📋 Match History — {view_date.isoformat()}")
     data = load_data()
     view_df = data[data["Date"] == view_date].copy()
 
@@ -518,7 +630,7 @@ with col1:
 
 # ---------- RIGHT COLUMN ----------
 with col2:
-    st.subheader("Imagine not drinking water.")
+    st.subheader("🛰️ Mission Status")
 
     total_today = get_daily_total(data, view_date)
     st.write(f"Total for {view_date.isoformat()}: **{total_today} ml**")
@@ -530,11 +642,11 @@ with col2:
     st.markdown("---")
     dates, totals = get_history_aggregated(data)
     chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
-    st.write("Last 7 days:")
+    st.write("🌊 7-day intake log:")
     st.bar_chart(chart_df.set_index("date")["total"])
 
     st.markdown("---")
-    st.subheader("Weekly summary")
+    st.subheader("📡 Intel Briefing — Week vs Week")
     this_week = get_week_avg(data, 0)
     last_week = get_week_avg(data, 1)
     if last_week > 0:
@@ -554,7 +666,7 @@ with col2:
         )
 
     st.markdown("---")
-    st.subheader("Ominous motivation.")
+    st.subheader("☎️ Captain Holt's Briefing")
     st.write("Your drinking habits are not up to the mark.")
 
     if theme_choice == "Funny & chaotic":
@@ -572,7 +684,7 @@ with col2:
 
 # ---------- BADGES ----------
 st.markdown("---")
-st.subheader("🏅 Badges & Milestones")
+st.subheader("🏅 Loadout Unlocks")
 unlocked = get_unlocked_badges(stats)
 unlocked_ids = {b["id"] for b in unlocked}
 st.write(f"Unlocked: **{len(unlocked)} / {len(BADGES)}**")
