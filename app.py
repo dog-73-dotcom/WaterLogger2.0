@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 import sqlalchemy as sa
 import os
 import random
@@ -533,13 +534,7 @@ if (today_now.month, today_now.day) == BIRTHDAY_MONTH_DAY:
         unsafe_allow_html=True
     )
 
-# Settings (moved out of sidebar to reclaim page width)
-with st.expander("⚙️ Settings"):
-    settings_cols = st.columns([1, 1.5])
-    with settings_cols[0]:
-        st.write("Daily goal:", f"**{DAILY_GOAL} ml**")
-    with settings_cols[1]:
-        theme_choice = st.radio("Theme", ["Funny & chaotic", "Minimal & calm"], index=0, horizontal=True)
+st.caption(f"Daily goal: **{DAILY_GOAL} ml**")
 
 # HUD status banner — reflects today's hydration before any column split
 _today_total_for_hud = get_daily_total(data, date.today())
@@ -652,7 +647,19 @@ st.markdown("---")
 dates, totals = get_history_aggregated(data)
 chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
 st.write("🌊 7-day intake log:")
-st.bar_chart(chart_df.set_index("date")["total"])
+
+water_chart = (
+    alt.Chart(chart_df)
+    .mark_bar(color="#FF4655", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+    .encode(
+        x=alt.X("date:N", sort=None, title=None, axis=alt.Axis(labelColor="#FFF6E0", labelAngle=-45)),
+        y=alt.Y("total:Q", title="ml", axis=alt.Axis(labelColor="#FFF6E0", titleColor="#FFF6E0")),
+    )
+    .properties(height=300, padding={"left": 55, "right": 15, "top": 10, "bottom": 10})
+    .configure_view(strokeWidth=0)
+    .configure_axis(grid=True, gridColor="#2a2a2a")
+)
+st.altair_chart(water_chart, use_container_width=True)
 
 # ---------- FULL-WIDTH: weekly comparison ----------
 st.subheader("📡 Intel Briefing — Week vs Week")
@@ -679,18 +686,10 @@ st.markdown("---")
 st.subheader("☎️ Captain Holt's Briefing")
 st.write("Your drinking habits are not up to the mark.")
 
-if theme_choice == "Funny & chaotic":
-    meme = random.choice(MEMES)
-    st.image(meme["url"], use_container_width=True)
-    msg = random.choice(MESSAGES)
-    st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
-else:
-    calm_msgs = [
-        "Small steps — sip-by-sip.",
-        "Consistency > intensity.",
-        "One glass at a time."
-    ]
-    st.markdown(f"<div class='custom-box'>{random.choice(calm_msgs)}</div>", unsafe_allow_html=True)
+meme = random.choice(MEMES)
+st.image(meme["url"], use_container_width=True)
+msg = random.choice(MESSAGES)
+st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
 
 # ---------- BADGES ----------
 st.markdown("---")
