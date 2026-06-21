@@ -21,15 +21,46 @@ DB_FILE = "data.db"
 OLD_CSV_FILE = "data.csv"  # only used for one-time migration if it exists
 DAILY_GOAL = 2000  # ml
 HISTORY_DAYS = 7
-TZ = pytz.timezone("Asia/Karachi")  # fixed: was Etc/GMT-4 (UTC+4), Karachi is UTC+5
+TZ = pytz.timezone("Asia/Karachi")
+BIRTHDAY_MONTH_DAY = (8, 1)  # Aug 1
 
-# ---------- MESSAGES ----------
+# ---------- PERSONALIZED MESSAGE BANK ----------
+# Mixed tone: sassy/teasing, never mean. Tagged by reference so it's easy to add more later.
 MESSAGES = [
+    # Valorant
+    {"type": "Valorant", "message": "Your hydration aim is more inconsistent than your Vandal spray."},
+    {"type": "Valorant", "message": "You peeked that corner dry-mouthed again. Drink water, agent."},
+    {"type": "Valorant", "message": "Defuse the dehydration before the round timer hits zero."},
+    {"type": "Valorant", "message": "Plant the spike, then go drink some water. Priorities."},
+    # Subnautica
+    {"type": "Subnautica", "message": "You explored the entire Aurora wreck but can't find a water bottle?"},
+    {"type": "Subnautica", "message": "Even the Sea Emperor stays hydrated, and it lives underwater 24/7."},
+    {"type": "Subnautica", "message": "Low hydration meter detected. The Reaper Leviathan is the least of your problems."},
+    # HIMYM
+    {"type": "HIMYM", "message": "This is the story of how you forgot to drink water, kids."},
+    {"type": "HIMYM", "message": "Not legen— wait for it —dary yet. Get hydrating."},
+    {"type": "HIMYM", "message": "You're the Barney of hydration — full of promises, no delivery."},
+    # Brooklyn 99
+    {"type": "B99", "message": "Cool cool cool cool cool, no doubt no doubt, but did you drink water? No doubt."},
+    {"type": "B99", "message": "Nine-Nine! Hydration squad, where you at?"},
+    {"type": "B99", "message": "Captain Holt would raise exactly one eyebrow at this hydration log."},
+    # Ready Player One
+    {"type": "RPO", "message": "You'd find the Copper Key faster than you'd find a water bottle."},
+    {"type": "RPO", "message": "Even inside the OASIS, your real body still needs actual water."},
+    # Batman
+    {"type": "Batman", "message": "It's not who you are underneath, it's how hydrated you are that defines you."},
+    {"type": "Batman", "message": "Gotham doesn't need a hero right now. It needs you to drink some water."},
+    {"type": "Batman", "message": "Bruce Wayne has a butler for hydration reminders. You just have this app."},
+    # Ben 10
+    {"type": "Ben10", "message": "Even with the Omnitrix, you can't transform out of being dehydrated."},
+    {"type": "Ben10", "message": "Slap that Omnitrix and turn into someone who actually drinks water."},
+    # Invincible
+    {"type": "Invincible", "message": "Even Viltrumites need to hydrate. Probably. Drink the water, Mark."},
+    {"type": "Invincible", "message": "You're not invincible. Drink the water."},
+    # General / original
     {"type": "Roast", "message": "Drink water before your organs file a complaint."},
     {"type": "Roast", "message": "Your cells are crispier than KFC."},
     {"type": "Quotes", "message": "Proud of you for hydrating (even a little)."},
-    {"type": "Maths", "message": "I wouldn't mind you being dehydrated but fainting is kinda my thing 🙄"},
-    {"type": "HIMYM", "message": "You're the Barney of hydration — full of promises, no delivery."},
     {"type": "Council", "message": "🧘ye deekho chookari maar ke aapke paani peene ka intezaar."}
 ]
 
@@ -58,6 +89,44 @@ MEMES = [
     {"url": "https://i.imgflip.com/ab2tqs.jpg", "caption": ""},
     {"url": "https://i.imgflip.com/ab2ttv.jpg", "caption": ""},
     {"url": "https://i.imgflip.com/ab2txr.jpg", "caption": ""}
+]
+
+# ---------- BADGES / MILESTONES ----------
+# Each check receives a `stats` dict (see get_stats below).
+BADGES = [
+    {"id": "spike_planted", "name": "Spike Planted", "icon": "🎯",
+     "desc": "Logged your first entry ever.",
+     "check": lambda s: s["lifetime_entries"] >= 1},
+    {"id": "first_ace", "name": "Ace", "icon": "🔫",
+     "desc": "Hit your daily goal for the first time.",
+     "check": lambda s: s["days_hit_goal"] >= 1},
+    {"id": "omnitrix", "name": "Omnitrix Unlocked", "icon": "⏱️",
+     "desc": "10 liters logged lifetime.",
+     "check": lambda s: s["lifetime_ml"] >= 10_000},
+    {"id": "oasis_key1", "name": "Copper Key", "icon": "🔑",
+     "desc": "Reached a 7-day streak.",
+     "check": lambda s: s["best_streak"] >= 7},
+    {"id": "nine_nine", "name": "Nine-Nine!", "icon": "🚔",
+     "desc": "99 entries logged total. Cool cool cool cool.",
+     "check": lambda s: s["lifetime_entries"] >= 99},
+    {"id": "oasis_key2", "name": "Jade Key", "icon": "🗝️",
+     "desc": "Reached a 14-day streak.",
+     "check": lambda s: s["best_streak"] >= 14},
+    {"id": "lifepod", "name": "Lifepod 5 Survivor", "icon": "🌊",
+     "desc": "50 liters logged lifetime.",
+     "check": lambda s: s["lifetime_ml"] >= 50_000},
+    {"id": "oasis_key3", "name": "Halliday's Egg", "icon": "🥚",
+     "desc": "Reached a 21-day streak.",
+     "check": lambda s: s["best_streak"] >= 21},
+    {"id": "dark_knight", "name": "I Am the Night", "icon": "🦇",
+     "desc": "Reached a 30-day streak.",
+     "check": lambda s: s["best_streak"] >= 30},
+    {"id": "legendary", "name": "Legen...dary", "icon": "🏆",
+     "desc": "100 liters logged lifetime.",
+     "check": lambda s: s["lifetime_ml"] >= 100_000},
+    {"id": "viltrumite", "name": "Viltrumite Endurance", "icon": "💪",
+     "desc": "Reached a 50-day streak. Practically invincible.",
+     "check": lambda s: s["best_streak"] >= 50},
 ]
 
 # ---------- DATABASE ----------
@@ -98,7 +167,6 @@ def init_db():
                 )
             """))
 
-    # One-time migration from the old CSV-based version, if it exists and the table is empty
     if os.path.exists(OLD_CSV_FILE):
         with ENGINE.begin() as conn:
             count = conn.execute(sa.text("SELECT COUNT(*) FROM entries")).scalar()
@@ -113,7 +181,7 @@ def init_db():
                             )
                     os.rename(OLD_CSV_FILE, OLD_CSV_FILE + ".migrated.bak")
                 except Exception:
-                    pass  # don't block app startup over a failed migration
+                    pass
 
 
 def load_data():
@@ -162,13 +230,76 @@ def get_history_aggregated(df, days=HISTORY_DAYS):
     return dates, totals
 
 
+# ---------- STREAKS / STATS / BADGES ----------
+def get_goal_days(df):
+    """Set of dates where the daily goal was met."""
+    if df.empty:
+        return set()
+    daily_totals = df.groupby("Date")["Amount (ml)"].sum()
+    return set(d for d, total in daily_totals.items() if total >= DAILY_GOAL)
+
+
+def get_streaks(goal_days):
+    """Returns (current_streak, best_streak) in days."""
+    if not goal_days:
+        return 0, 0
+
+    today = date.today()
+    current = 0
+    check_date = today if today in goal_days else today - timedelta(days=1)
+    while check_date in goal_days:
+        current += 1
+        check_date -= timedelta(days=1)
+
+    sorted_days = sorted(goal_days)
+    best = 1
+    run = 1
+    for i in range(1, len(sorted_days)):
+        if sorted_days[i] == sorted_days[i - 1] + timedelta(days=1):
+            run += 1
+        else:
+            run = 1
+        best = max(best, run)
+
+    return current, max(best, current)
+
+
+def get_stats(df):
+    goal_days = get_goal_days(df)
+    current_streak, best_streak = get_streaks(goal_days)
+    return {
+        "lifetime_ml": int(df["Amount (ml)"].sum()) if not df.empty else 0,
+        "lifetime_entries": int(len(df)),
+        "days_hit_goal": len(goal_days),
+        "current_streak": current_streak,
+        "best_streak": best_streak,
+    }
+
+
+def get_unlocked_badges(stats):
+    return [b for b in BADGES if b["check"](stats)]
+
+
+def get_week_avg(df, weeks_ago=0):
+    """Average daily ml for a given week (0 = this week, 1 = last week), Monday-start."""
+    today = date.today()
+    start_this_week = today - timedelta(days=today.weekday())
+    start = start_this_week - timedelta(weeks=weeks_ago)
+    end_cap = min(start + timedelta(days=6), today)
+    if end_cap < start:
+        return 0.0
+    days = [start + timedelta(days=i) for i in range((end_cap - start).days + 1)]
+    totals = [get_daily_total(df, d) for d in days]
+    return sum(totals) / len(totals) if totals else 0.0
+
+
 def announce_entry(amount, now, data_after):
     """Shared success/meme/message block used by both quick-add and custom-add."""
     st.success(f"Added {amount} ml at {now.strftime('%I:%M %p')}")
 
     total_today = get_daily_total(data_after, date.today())
     if total_today >= DAILY_GOAL:
-        st.success("🎉 HYDRATION SUPREMACY! You hit today's goal!")
+        st.success("🎉 ACE! You hit today's goal!")
 
     meme = random.choice(MEMES)
     st.image(meme["url"], use_container_width=True)
@@ -181,21 +312,98 @@ def announce_entry(amount, now, data_after):
 if "refresh" not in st.session_state:
     st.session_state.refresh = 0
 
-# ---------- CSS ----------
+# ---------- THEME: red / black / jasmine ----------
 st.markdown("""
 <style>
+:root {
+    --jw-red: #B3001B;
+    --jw-red-bright: #FF4655;
+    --jw-black: #0D0D0D;
+    --jw-panel: #181818;
+    --jw-jasmine: #FFF6E0;
+}
+
+[data-testid="stAppViewContainer"] {
+    background-color: var(--jw-black);
+}
+[data-testid="stHeader"] {
+    background-color: rgba(0,0,0,0);
+}
+[data-testid="stSidebar"] {
+    background-color: var(--jw-panel);
+    border-right: 1px solid var(--jw-red);
+}
+
+h1, h2, h3, h4, .stMarkdown p {
+    color: var(--jw-jasmine) !important;
+}
+
 div.stButton > button {
     min-width: 90px;
-    padding: 8px 0px;
-    font-size: 16px;
+    padding: 8px 4px;
+    font-size: 15px;
     margin: 2px 0px;
+    background-color: var(--jw-red);
+    color: var(--jw-jasmine);
+    border: 1px solid var(--jw-red-bright);
+    border-radius: 6px;
+    font-weight: 600;
 }
+div.stButton > button:hover {
+    background-color: var(--jw-red-bright);
+    color: var(--jw-black);
+    border: 1px solid var(--jw-jasmine);
+}
+
 .custom-box {
-    background-color: #f5faff;
-    color: black;
-    padding: 10px;
+    background-color: var(--jw-panel);
+    color: var(--jw-jasmine);
+    padding: 10px 14px;
     border-radius: 8px;
     margin-top: 8px;
+    border-left: 4px solid var(--jw-red-bright);
+}
+
+.streak-box {
+    background: linear-gradient(135deg, var(--jw-red) 0%, var(--jw-black) 100%);
+    color: var(--jw-jasmine);
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--jw-red-bright);
+    margin-bottom: 10px;
+}
+.streak-box .big {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.badge-locked {
+    opacity: 0.35;
+    filter: grayscale(1);
+}
+.badge-card {
+    background-color: var(--jw-panel);
+    border: 1px solid var(--jw-red);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    margin-bottom: 6px;
+}
+.badge-card .icon {
+    font-size: 26px;
+}
+.badge-card .name {
+    color: var(--jw-jasmine);
+    font-size: 13px;
+    font-weight: 600;
+}
+.badge-card .desc {
+    color: #c9c0a8;
+    font-size: 11px;
+}
+
+[data-testid="stProgress"] > div > div {
+    background-color: var(--jw-red-bright) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -203,22 +411,48 @@ div.stButton > button {
 # ---------- UI ----------
 st.markdown("""
 <div style="display:flex; align-items:center; gap:12px;">
-  <div style="font-size:28px;">💧</div>
-  <div style="font-size:30px; font-weight:600;">WaterYouDoing</div>
+  <div style="font-size:28px;">🌺💧</div>
+  <div style="font-size:30px; font-weight:700; color:#FFF6E0;">WaterYouDoing</div>
 </div>
 """, unsafe_allow_html=True)
 
 # Init + load
 init_db()
 data = load_data()
+stats = get_stats(data)
 
-# Sidebar (reminder controls removed — they weren't wired to anything)
+# Birthday easter egg
+today_now = date.today()
+if (today_now.month, today_now.day) == BIRTHDAY_MONTH_DAY:
+    st.balloons()
+    st.markdown(
+        "<div class='custom-box'>🌺 Happy Birthday! Even Viltrumites take a hydration break today. "
+        "Drink water, then go enjoy your day. 🎂</div>",
+        unsafe_allow_html=True
+    )
+
+# Sidebar
 with st.sidebar:
     st.header("Random stuff you dont need to worry about.")
     st.write("Daily goal:", f"**{DAILY_GOAL} ml**")
     st.markdown("---")
     st.write("Theme:")
     theme_choice = st.radio("", ["Funny & chaotic", "Minimal & calm"], index=0)
+
+# Streak banner
+streak_cols = st.columns(2)
+with streak_cols[0]:
+    st.markdown(f"""
+    <div class="streak-box">
+        🔥 Current Streak<br><span class="big">{stats['current_streak']} day{'s' if stats['current_streak'] != 1 else ''}</span>
+    </div>
+    """, unsafe_allow_html=True)
+with streak_cols[1]:
+    st.markdown(f"""
+    <div class="streak-box">
+        🏆 Best Streak<br><span class="big">{stats['best_streak']} day{'s' if stats['best_streak'] != 1 else ''}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # view_date is needed by both columns, so define it before the column split
 view_date = st.date_input("View date", value=date.today())
@@ -230,7 +464,6 @@ col1, col2 = st.columns([1.5, 1])
 with col1:
     st.subheader("Add water intake")
 
-    # Quick buttons
     quick_amounts = [250, 500]
     quick_cols = st.columns(len(quick_amounts))
     for idx, amt in enumerate(quick_amounts):
@@ -238,10 +471,10 @@ with col1:
             if st.button(f"+{amt} ml", key=f"quick_{amt}"):
                 now = add_entry(amt)
                 data = load_data()
+                stats = get_stats(data)
                 announce_entry(amt, now, data)
                 st.session_state.refresh += 1
 
-    # Custom input
     custom_amount = st.number_input("Or type amount (ml)", min_value=0, step=50, value=250)
     if st.button("Add entry"):
         if custom_amount <= 0:
@@ -249,12 +482,12 @@ with col1:
         else:
             now = add_entry(custom_amount)
             data = load_data()
+            stats = get_stats(data)
             announce_entry(custom_amount, now, data)
             st.session_state.refresh += 1
 
     st.markdown("---")
 
-    # Logs
     st.subheader(f"Logs for {view_date.isoformat()}")
     data = load_data()
     view_df = data[data["Date"] == view_date].copy()
@@ -297,8 +530,28 @@ with col2:
     st.markdown("---")
     dates, totals = get_history_aggregated(data)
     chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
-    st.write("Last week of cat's water rehab:")
+    st.write("Last 7 days:")
     st.bar_chart(chart_df.set_index("date")["total"])
+
+    st.markdown("---")
+    st.subheader("Weekly summary")
+    this_week = get_week_avg(data, 0)
+    last_week = get_week_avg(data, 1)
+    if last_week > 0:
+        pct_change = ((this_week - last_week) / last_week) * 100
+        direction = "up" if pct_change >= 0 else "down"
+        st.markdown(
+            f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
+            f"Last week's avg: <b>{last_week:.0f} ml/day</b><br>"
+            f"That's <b>{abs(pct_change):.0f}% {direction}</b> from last week.</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
+            f"Not enough history yet for a week-over-week comparison.</div>",
+            unsafe_allow_html=True
+        )
 
     st.markdown("---")
     st.subheader("Ominous motivation.")
@@ -316,6 +569,27 @@ with col2:
             "One glass at a time."
         ]
         st.markdown(f"<div class='custom-box'>{random.choice(calm_msgs)}</div>", unsafe_allow_html=True)
+
+# ---------- BADGES ----------
+st.markdown("---")
+st.subheader("🏅 Badges & Milestones")
+unlocked = get_unlocked_badges(stats)
+unlocked_ids = {b["id"] for b in unlocked}
+st.write(f"Unlocked: **{len(unlocked)} / {len(BADGES)}**")
+
+badge_cols = st.columns(4)
+for idx, badge in enumerate(BADGES):
+    is_unlocked = badge["id"] in unlocked_ids
+    css_class = "badge-card" if is_unlocked else "badge-card badge-locked"
+    icon = badge["icon"] if is_unlocked else "🔒"
+    with badge_cols[idx % 4]:
+        st.markdown(f"""
+        <div class="{css_class}">
+            <div class="icon">{icon}</div>
+            <div class="name">{badge['name']}</div>
+            <div class="desc">{badge['desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Raw data toggle
 st.markdown("---")
