@@ -343,7 +343,7 @@ if "refresh" not in st.session_state:
 # ---------- THEME: red / black / jasmine ----------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cormorant+Garamond:ital@1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cormorant+Garamond:ital@1&family=Saira+Condensed:wght@700;800&display=swap');
 
 :root {
     --jw-red: #B3001B;
@@ -446,6 +446,29 @@ div.stButton > button:active {
     margin-left: 4px;
 }
 
+.app-title {
+    font-family: 'Saira Condensed', sans-serif;
+    font-weight: 800;
+    font-size: 44px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--jw-jasmine);
+    text-shadow: 0 0 14px rgba(255,70,85,0.55), 2px 2px 0 rgba(0,0,0,0.5);
+    transform: skewX(-6deg);
+    display: inline-block;
+    line-height: 1;
+}
+.app-title-wrap {
+    position: relative;
+    padding-bottom: 6px;
+}
+.app-title-underline {
+    height: 4px;
+    width: 220px;
+    background: linear-gradient(90deg, var(--jw-red-bright), transparent);
+    margin-top: 2px;
+}
+
 .hud-banner {
     border-radius: 8px;
     padding: 10px 16px;
@@ -517,10 +540,13 @@ stats = get_stats(data)
 current_rank = get_rank(stats["current_streak"])
 
 st.markdown(f"""
-<div style="display:flex; align-items:center; gap:12px;">
-  <div style="font-size:28px;">🌺💧</div>
-  <div style="font-size:30px; font-weight:700; color:#FFF6E0;">WaterYouDoing</div>
-  <span class="rank-tag">{current_rank}</span>
+<div class="app-title-wrap">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div style="font-size:30px;">🌺💧</div>
+    <div class="app-title">WaterYouDoing</div>
+    <span class="rank-tag">{current_rank}</span>
+  </div>
+  <div class="app-title-underline"></div>
 </div>
 """, unsafe_allow_html=True)
 
