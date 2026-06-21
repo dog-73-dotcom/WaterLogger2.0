@@ -498,6 +498,26 @@ div.stButton > button:active {
 
 hr {
     border-color: rgba(255,70,85,0.25) !important;
+    margin: 0.35rem 0 !important;
+}
+
+/* ---- tighten default Streamlit spacing ---- */
+.block-container {
+    padding-top: 1.8rem !important;
+    padding-bottom: 2rem !important;
+}
+[data-testid="stVerticalBlock"] {
+    gap: 0.45rem !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    gap: 0.45rem !important;
+}
+div[data-testid="element-container"] {
+    margin-bottom: 0 !important;
+}
+.streak-box, .hud-banner, .custom-box {
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -639,7 +659,6 @@ with col2:
     st.progress(progress_val)
     st.write(f"{int(progress_val * 100)}% of {DAILY_GOAL} ml")
 
-    st.markdown("---")
     dates, totals = get_history_aggregated(data)
     chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
     st.write("🌊 7-day intake log:")
