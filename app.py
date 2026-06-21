@@ -667,35 +667,42 @@ water_chart = (
 )
 st.altair_chart(water_chart, use_container_width=True)
 
-# ---------- FULL-WIDTH: weekly comparison ----------
-st.subheader("📡 Intel Briefing — Week vs Week")
-this_week = get_week_avg(data, 0)
-last_week = get_week_avg(data, 1)
-if last_week > 0:
-    pct_change = ((this_week - last_week) / last_week) * 100
-    direction = "up" if pct_change >= 0 else "down"
-    st.markdown(
-        f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
-        f"Last week's avg: <b>{last_week:.0f} ml/day</b><br>"
-        f"That's <b>{abs(pct_change):.0f}% {direction}</b> from last week.</div>",
-        unsafe_allow_html=True
-    )
-else:
-    st.markdown(
-        f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
-        f"Not enough history yet for a week-over-week comparison.</div>",
-        unsafe_allow_html=True
-    )
-
-# ---------- FULL-WIDTH: Captain Holt's Briefing ----------
+# ---------- Intel Briefing + Captain Holt's Briefing, side by side ----------
 st.markdown("---")
-st.subheader("☎️ Captain Holt's Briefing")
-st.write("Your drinking habits are not up to the mark.")
+intel_col, holt_col = st.columns(2)
 
-meme = random.choice(MEMES)
-st.image(meme["url"], use_container_width=True)
-msg = random.choice(MESSAGES)
-st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
+with intel_col:
+    st.subheader("📡 Intel Briefing — Week vs Week")
+    this_week = get_week_avg(data, 0)
+    last_week = get_week_avg(data, 1)
+    if last_week > 0:
+        pct_change = ((this_week - last_week) / last_week) * 100
+        direction = "up" if pct_change >= 0 else "down"
+        st.markdown(
+            f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
+            f"Last week's avg: <b>{last_week:.0f} ml/day</b><br>"
+            f"That's <b>{abs(pct_change):.0f}% {direction}</b> from last week.</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
+            f"Not enough history yet for a week-over-week comparison.</div>",
+            unsafe_allow_html=True
+        )
+
+with holt_col:
+    st.subheader("☎️ Captain Holt's Briefing")
+    st.write("Your drinking habits are not up to the mark.")
+
+    meme = random.choice(MEMES)
+    st.markdown(
+        f"<img src='{meme['url']}' style='width:100%; max-height:220px; object-fit:cover; "
+        f"border-radius:8px; border:1px solid var(--jw-red);' />",
+        unsafe_allow_html=True
+    )
+    msg = random.choice(MESSAGES)
+    st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
 
 # ---------- BADGES ----------
 st.markdown("---")
