@@ -366,10 +366,6 @@ html, body, [class*="css"] {
 [data-testid="stHeader"] {
     background-color: rgba(0,0,0,0);
 }
-[data-testid="stSidebar"] {
-    background-color: var(--jw-panel);
-    border-right: 1px solid var(--jw-red);
-}
 
 h1, h2, h3, h4 {
     color: var(--jw-jasmine) !important;
@@ -498,6 +494,16 @@ div.stButton > button:active {
 
 hr {
     border-color: rgba(255,70,85,0.25) !important;
+    margin: 0.5rem 0 !important;
+}
+
+/* tighten default Streamlit spacing so more fits without scrolling */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+}
+[data-testid="stVerticalBlock"] {
+    gap: 0.6rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -527,13 +533,13 @@ if (today_now.month, today_now.day) == BIRTHDAY_MONTH_DAY:
         unsafe_allow_html=True
     )
 
-# Sidebar
-with st.sidebar:
-    st.header("Random stuff you dont need to worry about.")
-    st.write("Daily goal:", f"**{DAILY_GOAL} ml**")
-    st.markdown("---")
-    st.write("Theme:")
-    theme_choice = st.radio("", ["Funny & chaotic", "Minimal & calm"], index=0)
+# Settings (moved out of sidebar to reclaim page width)
+with st.expander("⚙️ Settings"):
+    settings_cols = st.columns([1, 1.5])
+    with settings_cols[0]:
+        st.write("Daily goal:", f"**{DAILY_GOAL} ml**")
+    with settings_cols[1]:
+        theme_choice = st.radio("Theme", ["Funny & chaotic", "Minimal & calm"], index=0, horizontal=True)
 
 # HUD status banner — reflects today's hydration before any column split
 _today_total_for_hud = get_daily_total(data, date.today())
@@ -641,35 +647,32 @@ if not view_df.empty:
 else:
     st.write("No entries for this date yet. Add one above!")
 
-# ---------- FULL-WIDTH: 7-day chart + weekly comparison ----------
+# ---------- FULL-WIDTH: 7-day chart ----------
 st.markdown("---")
-chart_col, intel_col = st.columns(2)
+dates, totals = get_history_aggregated(data)
+chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
+st.write("🌊 7-day intake log:")
+st.bar_chart(chart_df.set_index("date")["total"])
 
-with chart_col:
-    dates, totals = get_history_aggregated(data)
-    chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
-    st.write("🌊 7-day intake log:")
-    st.bar_chart(chart_df.set_index("date")["total"])
-
-with intel_col:
-    st.subheader("📡 Intel Briefing — Week vs Week")
-    this_week = get_week_avg(data, 0)
-    last_week = get_week_avg(data, 1)
-    if last_week > 0:
-        pct_change = ((this_week - last_week) / last_week) * 100
-        direction = "up" if pct_change >= 0 else "down"
-        st.markdown(
-            f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
-            f"Last week's avg: <b>{last_week:.0f} ml/day</b><br>"
-            f"That's <b>{abs(pct_change):.0f}% {direction}</b> from last week.</div>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
-            f"Not enough history yet for a week-over-week comparison.</div>",
-            unsafe_allow_html=True
-        )
+# ---------- FULL-WIDTH: weekly comparison ----------
+st.subheader("📡 Intel Briefing — Week vs Week")
+this_week = get_week_avg(data, 0)
+last_week = get_week_avg(data, 1)
+if last_week > 0:
+    pct_change = ((this_week - last_week) / last_week) * 100
+    direction = "up" if pct_change >= 0 else "down"
+    st.markdown(
+        f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
+        f"Last week's avg: <b>{last_week:.0f} ml/day</b><br>"
+        f"That's <b>{abs(pct_change):.0f}% {direction}</b> from last week.</div>",
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        f"<div class='custom-box'>This week's avg: <b>{this_week:.0f} ml/day</b><br>"
+        f"Not enough history yet for a week-over-week comparison.</div>",
+        unsafe_allow_html=True
+    )
 
 # ---------- FULL-WIDTH: Captain Holt's Briefing ----------
 st.markdown("---")
