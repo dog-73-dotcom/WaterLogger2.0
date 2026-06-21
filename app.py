@@ -566,13 +566,15 @@ with streak_cols[1]:
     </div>
     """, unsafe_allow_html=True)
 
-# view_date is needed by both columns, so define it before the column split
+# view_date is needed below, so define it before the column split
 view_date = st.date_input("View date", value=date.today())
 
-# Layout
-col1, col2 = st.columns([1.5, 1])
+# Layout — only put genuinely similar-sized content side by side.
+# Everything longer (table, chart, briefings) goes full-width below so one
+# column never ends up much taller than the other with a void beside it.
+col1, col2 = st.columns(2)
 
-# ---------- LEFT COLUMN ----------
+# ---------- LEFT COLUMN: quick add ----------
 with col1:
     st.subheader("🔫 Buy Phase — Stock Up")
 
@@ -598,37 +600,7 @@ with col1:
             announce_entry(custom_amount, now, data)
             st.session_state.refresh += 1
 
-    st.markdown("---")
-
-    st.subheader(f"📋 Match History — {view_date.isoformat()}")
-    data = load_data()
-    view_df = data[data["Date"] == view_date].copy()
-
-    if not view_df.empty:
-        view_df_display = view_df.copy()
-        view_df_display["Time"] = view_df_display["Time"].apply(
-            lambda t: datetime.strptime(str(t), "%H:%M:%S").strftime("%I:%M %p")
-        )
-
-        st.dataframe(
-            view_df_display[["id", "Time", "Amount (ml)"]].rename(columns={"id": "ID"}),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        to_delete = st.multiselect("Select rows to delete (ID)", view_df_display["id"])
-
-        if st.button("Delete selected"):
-            if to_delete:
-                delete_entries(to_delete)
-                st.success("Deleted selected entries.")
-                st.session_state.refresh += 1
-            else:
-                st.warning("Pick at least one row to delete.")
-    else:
-        st.write("No entries for this date yet. Add one above!")
-
-# ---------- RIGHT COLUMN ----------
+# ---------- RIGHT COLUMN: today's status ----------
 with col2:
     st.subheader("🛰️ Mission Status")
 
@@ -639,13 +611,47 @@ with col2:
     st.progress(progress_val)
     st.write(f"{int(progress_val * 100)}% of {DAILY_GOAL} ml")
 
-    st.markdown("---")
+# ---------- FULL-WIDTH: Match History ----------
+st.markdown("---")
+st.subheader(f"📋 Match History — {view_date.isoformat()}")
+data = load_data()
+view_df = data[data["Date"] == view_date].copy()
+
+if not view_df.empty:
+    view_df_display = view_df.copy()
+    view_df_display["Time"] = view_df_display["Time"].apply(
+        lambda t: datetime.strptime(str(t), "%H:%M:%S").strftime("%I:%M %p")
+    )
+
+    st.dataframe(
+        view_df_display[["id", "Time", "Amount (ml)"]].rename(columns={"id": "ID"}),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    to_delete = st.multiselect("Select rows to delete (ID)", view_df_display["id"])
+
+    if st.button("Delete selected"):
+        if to_delete:
+            delete_entries(to_delete)
+            st.success("Deleted selected entries.")
+            st.session_state.refresh += 1
+        else:
+            st.warning("Pick at least one row to delete.")
+else:
+    st.write("No entries for this date yet. Add one above!")
+
+# ---------- FULL-WIDTH: 7-day chart + weekly comparison ----------
+st.markdown("---")
+chart_col, intel_col = st.columns(2)
+
+with chart_col:
     dates, totals = get_history_aggregated(data)
     chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
     st.write("🌊 7-day intake log:")
     st.bar_chart(chart_df.set_index("date")["total"])
 
-    st.markdown("---")
+with intel_col:
     st.subheader("📡 Intel Briefing — Week vs Week")
     this_week = get_week_avg(data, 0)
     last_week = get_week_avg(data, 1)
@@ -665,22 +671,23 @@ with col2:
             unsafe_allow_html=True
         )
 
-    st.markdown("---")
-    st.subheader("☎️ Captain Holt's Briefing")
-    st.write("Your drinking habits are not up to the mark.")
+# ---------- FULL-WIDTH: Captain Holt's Briefing ----------
+st.markdown("---")
+st.subheader("☎️ Captain Holt's Briefing")
+st.write("Your drinking habits are not up to the mark.")
 
-    if theme_choice == "Funny & chaotic":
-        meme = random.choice(MEMES)
-        st.image(meme["url"], use_container_width=True)
-        msg = random.choice(MESSAGES)
-        st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
-    else:
-        calm_msgs = [
-            "Small steps — sip-by-sip.",
-            "Consistency > intensity.",
-            "One glass at a time."
-        ]
-        st.markdown(f"<div class='custom-box'>{random.choice(calm_msgs)}</div>", unsafe_allow_html=True)
+if theme_choice == "Funny & chaotic":
+    meme = random.choice(MEMES)
+    st.image(meme["url"], use_container_width=True)
+    msg = random.choice(MESSAGES)
+    st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
+else:
+    calm_msgs = [
+        "Small steps — sip-by-sip.",
+        "Consistency > intensity.",
+        "One glass at a time."
+    ]
+    st.markdown(f"<div class='custom-box'>{random.choice(calm_msgs)}</div>", unsafe_allow_html=True)
 
 # ---------- BADGES ----------
 st.markdown("---")
