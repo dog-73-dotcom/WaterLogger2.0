@@ -648,12 +648,18 @@ dates, totals = get_history_aggregated(data)
 chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
 st.write("🌊 7-day intake log:")
 
+y_max = max(DAILY_GOAL, int(chart_df["total"].max()) if not chart_df.empty else 0)
 water_chart = (
     alt.Chart(chart_df)
     .mark_bar(color="#FF4655", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
     .encode(
         x=alt.X("date:N", sort=None, title=None, axis=alt.Axis(labelColor="#FFF6E0", labelAngle=-45)),
-        y=alt.Y("total:Q", title="ml", axis=alt.Axis(labelColor="#FFF6E0", titleColor="#FFF6E0")),
+        y=alt.Y(
+            "total:Q",
+            title="ml",
+            scale=alt.Scale(domain=[0, y_max]),
+            axis=alt.Axis(labelColor="#FFF6E0", titleColor="#FFF6E0"),
+        ),
     )
     .properties(height=300, padding={"left": 55, "right": 15, "top": 10, "bottom": 10})
     .configure_view(strokeWidth=0)
