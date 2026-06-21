@@ -3,3 +3,4 @@ pandas
 pytz
 sqlalchemy
 psycopg2-binary
+altair
