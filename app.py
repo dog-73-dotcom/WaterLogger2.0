@@ -299,13 +299,13 @@ def get_rank(streak_days):
 def get_hud_status(total_today, goal):
     pct = total_today / goal if goal else 0
     if pct >= 1:
-        return "🟢", "OPTIMAL", "All systems hydrated."
+        return "OPTIMAL", "All systems hydrated."
     elif pct >= 0.5:
-        return "🟡", "STABLE", "Holding the line. Keep going."
+        return "STABLE", "Holding the line. Keep going."
     elif pct >= 0.2:
-        return "🟠", "LOW", "Hydration dropping. Resupply soon."
+        return "LOW", "Hydration dropping. Resupply soon."
     else:
-        return "🔴", "CRITICAL", "Reaper Leviathan Approaching. Drink water now."
+        return "CRITICAL", "Reaper Leviathan Approaching. Drink water now."
 
 
 def get_week_avg(df, weeks_ago=0):
@@ -542,7 +542,6 @@ current_rank = get_rank(stats["current_streak"])
 st.markdown(f"""
 <div class="app-title-wrap">
   <div style="display:flex; align-items:center; gap:14px;">
-    <div style="font-size:30px;">🌺💧</div>
     <div class="app-title">WaterYouDoing</div>
     <span class="rank-tag">{current_rank}</span>
   </div>
@@ -564,7 +563,7 @@ st.caption(f"Daily goal: **{DAILY_GOAL} ml**")
 
 # HUD status banner — reflects today's hydration before any column split
 _today_total_for_hud = get_daily_total(data, date.today())
-_emoji, _label, _subtext = get_hud_status(_today_total_for_hud, DAILY_GOAL)
+_label, _subtext = get_hud_status(_today_total_for_hud, DAILY_GOAL)
 _hud_colors = {
     "OPTIMAL": ("#1f4d2b", "#3ddc6f"),
     "STABLE": ("#4d4319", "#ffd23d"),
@@ -574,7 +573,7 @@ _hud_colors = {
 _bg, _border = _hud_colors[_label]
 st.markdown(f"""
 <div class="hud-banner" style="background-color:{_bg}; border-color:{_border}; color:{_border};">
-    {_emoji} STATUS: {_label} — {_subtext}
+    STATUS: {_label} — {_subtext}
 </div>
 """, unsafe_allow_html=True)
 
@@ -583,13 +582,13 @@ streak_cols = st.columns(2)
 with streak_cols[0]:
     st.markdown(f"""
     <div class="streak-box">
-        🔥 Current Streak<br><span class="big">{stats['current_streak']} day{'s' if stats['current_streak'] != 1 else ''}</span>
+        Current Streak<br><span class="big">{stats['current_streak']} day{'s' if stats['current_streak'] != 1 else ''}</span>
     </div>
     """, unsafe_allow_html=True)
 with streak_cols[1]:
     st.markdown(f"""
     <div class="streak-box">
-        🏆 Best Streak<br><span class="big">{stats['best_streak']} day{'s' if stats['best_streak'] != 1 else ''}</span>
+        Best Streak<br><span class="big">{stats['best_streak']} day{'s' if stats['best_streak'] != 1 else ''}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -603,7 +602,7 @@ col1, col2 = st.columns(2)
 
 # ---------- LEFT COLUMN: quick add ----------
 with col1:
-    st.subheader("🔫 Buy Phase — Stock Up")
+    st.subheader("Buy Phase — Stock Up")
 
     quick_amounts = [250, 500]
     quick_cols = st.columns(len(quick_amounts))
@@ -629,7 +628,7 @@ with col1:
 
 # ---------- RIGHT COLUMN: today's status ----------
 with col2:
-    st.subheader("🛰️ Mission Status")
+    st.subheader("Mission Status")
 
     total_today = get_daily_total(data, view_date)
     st.write(f"Total for {view_date.isoformat()}: **{total_today} ml**")
@@ -640,7 +639,7 @@ with col2:
 
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown("---")
-st.subheader(f"📋 Match History — {view_date.isoformat()}")
+st.subheader(f"Match History — {view_date.isoformat()}")
 data = load_data()
 view_df = data[data["Date"] == view_date].copy()
 
@@ -672,7 +671,7 @@ else:
 st.markdown("---")
 dates, totals = get_history_aggregated(data)
 chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
-st.write("🌊 7-day intake log:")
+st.write("7-day intake log:")
 
 y_max = max(DAILY_GOAL, int(chart_df["total"].max()) if not chart_df.empty else 0)
 water_chart = (
@@ -698,7 +697,7 @@ st.markdown("---")
 intel_col, holt_col = st.columns(2)
 
 with intel_col:
-    st.subheader("📡 Intel Briefing — Week vs Week")
+    st.subheader("Intel Briefing — Week vs Week")
     this_week = get_week_avg(data, 0)
     last_week = get_week_avg(data, 1)
     if last_week > 0:
@@ -718,7 +717,7 @@ with intel_col:
         )
 
 with holt_col:
-    st.subheader("☎️ Captain Holt's Briefing")
+    st.subheader("Captain Holt's Briefing")
     st.write("Your drinking habits are not up to the mark.")
 
     meme = random.choice(MEMES)
@@ -732,7 +731,7 @@ with holt_col:
 
 # ---------- BADGES ----------
 st.markdown("---")
-st.subheader("🏅 Loadout Unlocks")
+st.subheader("Loadout Unlocks")
 unlocked = get_unlocked_badges(stats)
 unlocked_ids = {b["id"] for b in unlocked}
 st.write(f"Unlocked: **{len(unlocked)} / {len(BADGES)}**")
