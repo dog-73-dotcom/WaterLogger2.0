@@ -158,6 +158,15 @@ def init_db():
                     amount_ml INTEGER NOT NULL
                 )
             """))
+            conn.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS moods (
+                    id SERIAL PRIMARY KEY,
+                    date TEXT NOT NULL UNIQUE,
+                    mood_score INTEGER NOT NULL,
+                    mood_label TEXT NOT NULL,
+                    note TEXT
+                )
+            """))
         else:
             conn.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS entries (
@@ -165,6 +174,15 @@ def init_db():
                     date TEXT NOT NULL,
                     time TEXT NOT NULL,
                     amount_ml INTEGER NOT NULL
+                )
+            """))
+            conn.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS moods (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL UNIQUE,
+                    mood_score INTEGER NOT NULL,
+                    mood_label TEXT NOT NULL,
+                    note TEXT
                 )
             """))
 
@@ -216,6 +234,72 @@ def delete_entries(ids):
         for i in ids:
             conn.execute(sa.text("DELETE FROM entries WHERE id = :i"), {"i": int(i)})
     return True
+
+
+# ---------- MOOD ----------
+MOOD_OPTIONS = {
+    "Radiant 😭": 5,
+    "Good 🙂": 4,
+    "Meh 😐": 3,
+    "Bad 😞": 2,
+    "Awful 💀": 1,
+}
+MOOD_COLORS = {5: "#3ddc6f", 4: "#a8e06a", 3: "#ffd23d", 2: "#ff9d3d", 1: "#ff4655"}
+
+
+def save_mood(target_date, mood_label, note=""):
+    score = MOOD_OPTIONS[mood_label]
+    with ENGINE.begin() as conn:
+        if IS_POSTGRES:
+            conn.execute(sa.text("""
+                INSERT INTO moods (date, mood_score, mood_label, note)
+                VALUES (:d, :s, :l, :n)
+                ON CONFLICT (date) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
+            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note})
+        else:
+            conn.execute(sa.text("""
+                INSERT INTO moods (date, mood_score, mood_label, note)
+                VALUES (:d, :s, :l, :n)
+                ON CONFLICT(date) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
+            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note})
+
+
+def load_moods():
+    try:
+        df = pd.read_sql("SELECT * FROM moods ORDER BY date DESC", ENGINE)
+        if df.empty:
+            return pd.DataFrame(columns=["id", "date", "mood_score", "mood_label", "note"])
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["id", "date", "mood_score", "mood_label", "note"])
+
+
+def get_mood_for_date(mood_df, target_date):
+    row = mood_df[mood_df["date"] == target_date]
+    if row.empty:
+        return None, None, None
+    r = row.iloc[0]
+    return int(r["mood_score"]), r["mood_label"], r["note"]
+
+
+def get_monthly_mood(mood_df, year, month):
+    if mood_df.empty:
+        return pd.DataFrame()
+    mask = mood_df["date"].apply(lambda d: d.year == year and d.month == month)
+    return mood_df[mask].copy()
+
+
+def get_weekly_best_worst(df):
+    """Returns best and worst day-of-week label by average daily water intake."""
+    if df.empty:
+        return None, None
+    df = df.copy()
+    df["dow"] = df["Date"].apply(lambda d: d.strftime("%A"))
+    avg = df.groupby("dow")["Amount (ml)"].sum() / df.groupby("dow")["Date"].nunique()
+    if len(avg) < 2:
+        return None, None
+    return avg.idxmax(), avg.idxmin()
 
 
 def get_daily_total(df, target_date):
@@ -536,6 +620,7 @@ hr {
 # Init + load
 init_db()
 data = load_data()
+mood_data = load_moods()
 stats = get_stats(data)
 current_rank = get_rank(stats["current_streak"])
 
@@ -600,7 +685,7 @@ view_date = st.date_input("View date", value=date.today())
 # column never ends up much taller than the other with a void beside it.
 col1, col2 = st.columns(2)
 
-# ---------- LEFT COLUMN: quick add ----------
+# ---------- LEFT COLUMN: quick add + mood ----------
 with col1:
     st.subheader("Buy Phase — Stock Up")
 
@@ -626,6 +711,34 @@ with col1:
             announce_entry(custom_amount, now, data)
             st.session_state.refresh += 1
 
+    st.markdown("---")
+    st.subheader("Daily Mood")
+
+    mood_data = load_moods()
+    existing_score, existing_label, existing_note = get_mood_for_date(mood_data, date.today())
+
+    if existing_label:
+        mood_color = MOOD_COLORS[existing_score]
+        st.markdown(
+            f"<div class='custom-box' style='border-left-color:{mood_color};'>"
+            f"Today: <b>{existing_label}</b>"
+            f"{(' — ' + existing_note) if existing_note else ''}</div>",
+            unsafe_allow_html=True
+        )
+        st.caption("Update today's mood below:")
+
+    mood_choice = st.selectbox(
+        "How are you feeling today?",
+        list(MOOD_OPTIONS.keys()),
+        index=list(MOOD_OPTIONS.keys()).index(existing_label) if existing_label else 2,
+        label_visibility="collapsed"
+    )
+    mood_note = st.text_input("Add a note (optional)", value=existing_note or "", placeholder="rough day, headache, good vibes...")
+    if st.button("Log mood"):
+        save_mood(date.today(), mood_choice, mood_note)
+        st.success(f"Mood logged: {mood_choice}")
+        st.session_state.refresh += 1
+
 # ---------- RIGHT COLUMN: today's status ----------
 with col2:
     st.subheader("Mission Status")
@@ -636,6 +749,16 @@ with col2:
     progress_val = min(total_today / DAILY_GOAL, 1)
     st.progress(progress_val)
     st.write(f"{int(progress_val * 100)}% of {DAILY_GOAL} ml")
+
+    # Best/worst day of week
+    best_dow, worst_dow = get_weekly_best_worst(data)
+    if best_dow and worst_dow:
+        st.markdown("---")
+        st.markdown(
+            f"<div class='custom-box'>Best day: <b>{best_dow}</b><br>"
+            f"Worst day: <b>{worst_dow}</b> — classic.</div>",
+            unsafe_allow_html=True
+        )
 
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown("---")
@@ -728,6 +851,65 @@ with holt_col:
     )
     msg = random.choice(MESSAGES)
     st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
+
+# ---------- MONTHLY MOOD + WATER ----------
+st.markdown("---")
+st.subheader("Monthly Overview — Mood & Water")
+
+_now = datetime.now(TZ)
+month_col, year_col = st.columns([2, 1])
+with month_col:
+    selected_month = st.selectbox("Month", list(range(1, 13)),
+        index=_now.month - 1,
+        format_func=lambda m: datetime(2000, m, 1).strftime("%B"))
+with year_col:
+    selected_year = st.number_input("Year", min_value=2020, max_value=_now.year, value=_now.year)
+
+# Build daily water totals for selected month
+import calendar
+_, days_in_month = calendar.monthrange(selected_year, selected_month)
+month_dates = [date(selected_year, selected_month, d) for d in range(1, days_in_month + 1)]
+water_totals = [get_daily_total(data, d) for d in month_dates]
+month_mood_df = get_monthly_mood(load_moods(), selected_year, selected_month)
+
+overview_df = pd.DataFrame({
+    "date": [d.isoformat() for d in month_dates],
+    "water_ml": water_totals,
+})
+mood_map = {str(r["date"]): r["mood_score"] for _, r in month_mood_df.iterrows()} if not month_mood_df.empty else {}
+overview_df["mood_score"] = overview_df["date"].map(mood_map)
+
+water_bars = (
+    alt.Chart(overview_df)
+    .mark_bar(color="#FF4655", opacity=0.85, cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
+    .encode(
+        x=alt.X("date:N", sort=None, title=None, axis=alt.Axis(labelColor="#FFF6E0", labelAngle=-45, labelFontSize=9)),
+        y=alt.Y("water_ml:Q", title="Water (ml)", scale=alt.Scale(domain=[0, max(DAILY_GOAL, int(overview_df["water_ml"].max()) + 100)]),
+                axis=alt.Axis(labelColor="#FFF6E0", titleColor="#FFF6E0")),
+    )
+)
+goal_line = (
+    alt.Chart(pd.DataFrame({"y": [DAILY_GOAL]}))
+    .mark_rule(color="#FFF6E0", strokeDash=[4, 4], opacity=0.4)
+    .encode(y="y:Q")
+)
+mood_line = (
+    alt.Chart(overview_df.dropna(subset=["mood_score"]))
+    .mark_line(color="#ffd23d", point=alt.OverlayMarkDef(color="#ffd23d", size=60), strokeWidth=2)
+    .encode(
+        x=alt.X("date:N", sort=None),
+        y=alt.Y("mood_score:Q", title="Mood (1–5)",
+                scale=alt.Scale(domain=[0, 5]),
+                axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d")),
+    )
+)
+combined = alt.layer(water_bars, goal_line, mood_line).resolve_scale(y="independent").properties(
+    height=280,
+    padding={"left": 55, "right": 55, "top": 10, "bottom": 10}
+).configure_view(strokeWidth=0).configure_axis(grid=True, gridColor="#2a2a2a")
+
+st.altair_chart(combined, use_container_width=True)
+st.caption("Red bars = water intake. Yellow line = mood (1 awful → 5 great). Dashed white line = daily goal.")
 
 # ---------- BADGES ----------
 st.markdown("---")
