@@ -19,11 +19,50 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 DB_FILE = "data.db"
-OLD_CSV_FILE = "data.csv"  # only used for one-time migration if it exists
+OLD_CSV_FILE = "data.csv"
 DAILY_GOAL = 2000  # ml
 HISTORY_DAYS = 7
 TZ = pytz.timezone("Asia/Karachi")
 BIRTHDAY_MONTH_DAY = (8, 1)  # Aug 1
+
+# ---------- ANNIVERSARY DATES ----------
+# (month, day, year_or_None, label, message)
+ANNIVERSARIES = [
+    (2, 17, 2024, "Reunion",
+     "Today marks {years} year{s} since the reunion. Still not drinking enough water though. Some things never change."),
+    (6, 20, 2026, "The Confession",
+     "One year of courage. Still takes more guts to hit 2000ml a day apparently."),
+    (9, 15, 2025, "The ILY",
+     "Said it {years} year{s} ago. The app remembers even if you pretend not to. Drink water."),
+    (8, 1, 2007, "Birthday",
+     "Another year older. Another year of questionable hydration decisions. Happy birthday. 🎂"),
+]
+
+# ---------- ROAST ESCALATION BY TIME SINCE LAST ENTRY ----------
+# (hours_since_last, roast_messages)
+ESCALATION_TIERS = [
+    (0, 2, [
+        "Logged recently. Impressive. Don't get comfortable.",
+        "Look at you, barely keeping it together. Still counts though.",
+        "Hydration status: marginally acceptable. Don't push it.",
+    ]),
+    (2, 4, [
+        "It's been a while. Your cells are starting to file paperwork.",
+        "Two hours without water? Even the Sea Emperor is disappointed.",
+        "Cool cool cool cool. No water. No doubt no doubt.",
+    ]),
+    (4, 6, [
+        "FOUR HOURS. The Omnitrix could fix this. Sadly, you don't have one.",
+        "Gotham is literally collapsing and you still haven't had water.",
+        "At this point Fardan is winning. Think about that.",
+    ]),
+    (6, 999, [
+        "SIX HOURS. The Reaper Leviathan has been notified of your location.",
+        "This is not a drill. CRITICAL HYDRATION FAILURE. Even Viltrumites drink water.",
+        "Six hours without water. Batman would be ashamed. Actually ashamed.",
+        "Mark Grayson survives being punched through mountains. You can't survive drinking water. Incredible.",
+    ]),
+]
 
 # ---------- PERSONALIZED MESSAGE BANK ----------
 # Mixed tone: sassy/teasing, never mean. Tagged by reference so it's easy to add more later.
@@ -238,13 +277,22 @@ def delete_entries(ids):
 
 # ---------- MOOD ----------
 MOOD_OPTIONS = {
-    "Radiant 😭": 5,
-    "Good 🙂": 4,
-    "Meh 😐": 3,
-    "Bad 😞": 2,
-    "Awful 💀": 1,
+    "Radiant — on top of the world": 10,
+    "Ascendant — genuinely great": 9,
+    "Really good": 8,
+    "Good": 7,
+    "Pretty okay": 6,
+    "Meh": 5,
+    "Not great": 4,
+    "Bad": 3,
+    "Awful": 2,
+    "Deceased — do not disturb": 1,
 }
-MOOD_COLORS = {5: "#3ddc6f", 4: "#a8e06a", 3: "#ffd23d", 2: "#ff9d3d", 1: "#ff4655"}
+MOOD_COLORS = {
+    10: "#3ddc6f", 9: "#5ee87a", 8: "#a8e06a", 7: "#c8e86a",
+    6: "#ffd23d", 5: "#ffc03d", 4: "#ff9d3d", 3: "#ff7a3d",
+    2: "#ff5533", 1: "#ff4655"
+}
 
 
 def save_mood(target_date, mood_label, note=""):
@@ -300,6 +348,92 @@ def get_weekly_best_worst(df):
     if len(avg) < 2:
         return None, None
     return avg.idxmax(), avg.idxmin()
+
+
+def get_anniversary_message(today):
+    """Return a message if today matches any anniversary, else None."""
+    messages = []
+    for month, day, year, label, template in ANNIVERSARIES:
+        if today.month == month and today.day == day:
+            years = today.year - year if year else 1
+            s = "s" if years != 1 else ""
+            # For same-year events (years == 0), still show the message but say "today"
+            if years == 0:
+                msg = template.format(years="less than a", s="")
+            else:
+                msg = template.format(years=years, s=s)
+            messages.append((label, msg))
+    return messages
+
+
+def get_escalation_message(df_today):
+    """Return a roast based on how long since the last water entry today."""
+    if df_today.empty:
+        return ESCALATION_TIERS[-1][2][-1]  # nothing logged at all — max tier
+
+    # Get the latest entry time today
+    now = datetime.now(TZ)
+    last_time = df_today["Time"].max()
+    last_dt = datetime.combine(date.today(), last_time)
+    hours_since = (now - last_dt).total_seconds() / 3600
+
+    for low, high, msgs in ESCALATION_TIERS:
+        if low <= hours_since < high:
+            return random.choice(msgs)
+    return random.choice(ESCALATION_TIERS[-1][2])
+
+
+def get_report_card(df, mood_df, year, month):
+    """Generate a monthly report card dict."""
+    import calendar
+    _, days_in_month = calendar.monthrange(year, month)
+    month_dates = [date(year, month, d) for d in range(1, days_in_month + 1)]
+    today = date.today()
+    elapsed_dates = [d for d in month_dates if d <= today]
+
+    if not elapsed_dates:
+        return None
+
+    # Water stats
+    totals = [get_daily_total(df, d) for d in elapsed_dates]
+    avg_water = sum(totals) / len(totals)
+    days_hit = sum(1 for t in totals if t >= DAILY_GOAL)
+    hit_rate = days_hit / len(elapsed_dates)
+
+    # Mood stats
+    mood_scores = []
+    if not mood_df.empty:
+        for d in elapsed_dates:
+            row = mood_df[mood_df["date"] == d]
+            if not row.empty:
+                mood_scores.append(int(row.iloc[0]["mood_score"]))
+    avg_mood = sum(mood_scores) / len(mood_scores) if mood_scores else None
+
+    # Grade: weighted 60% hit rate, 40% avg water proportion
+    water_score = min(avg_water / DAILY_GOAL, 1.0)
+    combined = (hit_rate * 0.6) + (water_score * 0.4)
+    if combined >= 0.9:
+        grade, verdict = "S", "Absolutely unstoppable. Radiant energy."
+    elif combined >= 0.75:
+        grade, verdict = "A", "Solid work. Viltrumite approved."
+    elif combined >= 0.6:
+        grade, verdict = "B", "Holding the line. Not bad, not great."
+    elif combined >= 0.45:
+        grade, verdict = "C", "Could be worse. Could very easily be better."
+    elif combined >= 0.3:
+        grade, verdict = "D", "Yikes. Fardan is somewhere out there thriving."
+    else:
+        grade, verdict = "F", "The Reaper Leviathan has already filed the paperwork."
+
+    return {
+        "grade": grade,
+        "verdict": verdict,
+        "avg_water": avg_water,
+        "days_hit": days_hit,
+        "total_days": len(elapsed_dates),
+        "hit_rate": hit_rate,
+        "avg_mood": avg_mood,
+    }
 
 
 def get_daily_total(df, target_date):
@@ -634,13 +768,15 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Birthday easter egg
+# Anniversary + birthday messages
 today_now = date.today()
-if (today_now.month, today_now.day) == BIRTHDAY_MONTH_DAY:
-    st.balloons()
+anniversary_hits = get_anniversary_message(today_now)
+for label, msg in anniversary_hits:
+    if label == "Birthday":
+        st.balloons()
     st.markdown(
-        "<div class='custom-box'>🌺 Happy Birthday! Even Viltrumites take a hydration break today. "
-        "Drink water, then go enjoy your day. 🎂</div>",
+        f"<div class='custom-box' style='border-left-color:#ffd23d; font-size:15px;'>"
+        f"<b>{label}</b> — {msg}</div>",
         unsafe_allow_html=True
     )
 
@@ -730,7 +866,7 @@ with col1:
     mood_choice = st.selectbox(
         "How are you feeling today?",
         list(MOOD_OPTIONS.keys()),
-        index=list(MOOD_OPTIONS.keys()).index(existing_label) if existing_label else 2,
+        index=list(MOOD_OPTIONS.keys()).index(existing_label) if existing_label else 4,
         label_visibility="collapsed"
     )
     mood_note = st.text_input("Add a note (optional)", value=existing_note or "", placeholder="rough day, headache, good vibes...")
@@ -841,12 +977,16 @@ with intel_col:
 
 with holt_col:
     st.subheader("Captain Holt's Briefing")
-    st.write("Your drinking habits are not up to the mark.")
+
+    # Escalated roast based on time since last entry today
+    today_entries = data[data["Date"] == date.today()]
+    escalation_msg = get_escalation_message(today_entries)
+    st.markdown(f"<div class='custom-box' style='border-left-color:#FF4655;'>{escalation_msg}</div>", unsafe_allow_html=True)
 
     meme = random.choice(MEMES)
     st.markdown(
         f"<img src='{meme['url']}' style='width:100%; max-height:220px; object-fit:cover; "
-        f"border-radius:8px; border:1px solid var(--jw-red);' />",
+        f"border-radius:8px; border:1px solid var(--jw-red); margin-top:8px;' />",
         unsafe_allow_html=True
     )
     msg = random.choice(MESSAGES)
@@ -898,8 +1038,8 @@ mood_line = (
     .mark_line(color="#ffd23d", point=alt.OverlayMarkDef(color="#ffd23d", size=60), strokeWidth=2)
     .encode(
         x=alt.X("date:N", sort=None),
-        y=alt.Y("mood_score:Q", title="Mood (1–5)",
-                scale=alt.Scale(domain=[0, 5]),
+        y=alt.Y("mood_score:Q", title="Mood (1–10)",
+                scale=alt.Scale(domain=[0, 10]),
                 axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d")),
     )
 )
@@ -909,7 +1049,37 @@ combined = alt.layer(water_bars, goal_line, mood_line).resolve_scale(y="independ
 ).configure_view(strokeWidth=0).configure_axis(grid=True, gridColor="#2a2a2a")
 
 st.altair_chart(combined, use_container_width=True)
-st.caption("Red bars = water intake. Yellow line = mood (1 awful → 5 great). Dashed white line = daily goal.")
+st.caption("Red bars = water intake. Yellow line = mood (1 awful → 10 radiant). Dashed white line = daily goal.")
+
+# Report card for selected month
+report = get_report_card(data, load_moods(), selected_year, selected_month)
+if report:
+    st.markdown("---")
+    st.subheader(f"Report Card — {datetime(selected_year, selected_month, 1).strftime('%B %Y')}")
+    grade_colors = {"S": "#ffd23d", "A": "#3ddc6f", "B": "#a8e06a", "C": "#ffd23d", "D": "#ff9d3d", "F": "#ff4655"}
+    gc = grade_colors.get(report["grade"], "#FFF6E0")
+    rc1, rc2 = st.columns([1, 3])
+    with rc1:
+        st.markdown(
+            f"<div style='text-align:center; background:var(--jw-panel); border:2px solid {gc}; "
+            f"border-radius:12px; padding:18px 0;'>"
+            f"<div style='font-family:Saira Condensed,sans-serif; font-size:72px; font-weight:800; color:{gc}; line-height:1;'>"
+            f"{report['grade']}</div>"
+            f"<div style='color:#c9c0a8; font-size:12px; margin-top:4px;'>Grade</div></div>",
+            unsafe_allow_html=True
+        )
+    with rc2:
+        mood_line = f"<br>Avg mood: <b>{report['avg_mood']:.1f} / 10</b>" if report["avg_mood"] else ""
+        st.markdown(
+            f"<div class='custom-box' style='border-left-color:{gc}; height:100%;'>"
+            f"<i>{report['verdict']}</i><br><br>"
+            f"Goal hit: <b>{report['days_hit']} / {report['total_days']} days "
+            f"({report['hit_rate']*100:.0f}%)</b><br>"
+            f"Avg intake: <b>{report['avg_water']:.0f} ml/day</b>"
+            f"{mood_line}</div>",
+            unsafe_allow_html=True
+        )
+
 
 # ---------- BADGES ----------
 st.markdown("---")
