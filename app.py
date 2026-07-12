@@ -926,30 +926,98 @@ if not view_df.empty:
 else:
     st.write("No entries for this date yet. Add one above!")
 
-# ---------- FULL-WIDTH: 7-day chart ----------
+# ---------- FULL-WIDTH: unified water + mood dual-axis chart ----------
+import calendar
 st.markdown("---")
-dates, totals = get_history_aggregated(data)
-chart_df = pd.DataFrame({"date": [d.isoformat() for d in dates], "total": totals})
-st.write("7-day intake log:")
+st.subheader("Water & Mood")
 
-y_max = max(DAILY_GOAL, int(chart_df["total"].max()) if not chart_df.empty else 0)
-water_chart = (
-    alt.Chart(chart_df)
-    .mark_bar(color="#FF4655", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+_now = datetime.now(TZ)
+view_mode = st.radio("Period", ["Last 7 days", "Monthly"], horizontal=True, label_visibility="collapsed")
+
+if view_mode == "Last 7 days":
+    _dates_range, _totals_range = get_history_aggregated(data)
+    _chart_dates = [d.isoformat() for d in _dates_range]
+    _water_vals = _totals_range
+    _mood_rows = load_moods()
+    _mood_map = {str(r["date"]): r["mood_score"] for _, r in _mood_rows.iterrows()} if not _mood_rows.empty else {}
+    _mood_vals = [_mood_map.get(d) for d in _chart_dates]
+    _label_angle = 0
+    _rc_month = _now.month
+    _rc_year = _now.year
+else:
+    _mc, _yc = st.columns([2, 1])
+    with _mc:
+        _rc_month = st.selectbox("Month", list(range(1, 13)),
+            index=_now.month - 1,
+            format_func=lambda m: datetime(2000, m, 1).strftime("%B"))
+    with _yc:
+        _rc_year = st.number_input("Year", min_value=2020, max_value=_now.year, value=_now.year)
+    _, _dim = calendar.monthrange(_rc_year, _rc_month)
+    _month_dates = [date(_rc_year, _rc_month, d) for d in range(1, _dim + 1)]
+    _chart_dates = [d.isoformat() for d in _month_dates]
+    _water_vals = [get_daily_total(data, d) for d in _month_dates]
+    _mmdf = get_monthly_mood(load_moods(), _rc_year, _rc_month)
+    _mood_map = {str(r["date"]): r["mood_score"] for _, r in _mmdf.iterrows()} if not _mmdf.empty else {}
+    _mood_vals = [_mood_map.get(d) for d in _chart_dates]
+    _label_angle = -45
+
+_y_water_max = max(DAILY_GOAL, max(_water_vals) if _water_vals else 0)
+
+_unified_df = pd.DataFrame({
+    "date": _chart_dates,
+    "water_ml": _water_vals,
+    "mood_score": _mood_vals,
+})
+
+# Water bars — left axis
+_water_bars = (
+    alt.Chart(_unified_df)
+    .mark_bar(color="#FF4655", opacity=0.85, cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
     .encode(
-        x=alt.X("date:N", sort=None, title=None, axis=alt.Axis(labelColor="#FFF6E0", labelAngle=-45)),
-        y=alt.Y(
-            "total:Q",
-            title="ml",
-            scale=alt.Scale(domain=[0, y_max]),
-            axis=alt.Axis(labelColor="#FFF6E0", titleColor="#FFF6E0"),
-        ),
+        x=alt.X("date:N", sort=None, title=None,
+                axis=alt.Axis(labelColor="#FFF6E0", labelAngle=_label_angle, labelFontSize=10)),
+        y=alt.Y("water_ml:Q",
+                title="Water (ml)",
+                scale=alt.Scale(domain=[0, _y_water_max]),
+                axis=alt.Axis(labelColor="#FF4655", titleColor="#FF4655", orient="left")),
     )
-    .properties(height=300, padding={"left": 55, "right": 15, "top": 10, "bottom": 10})
-    .configure_view(strokeWidth=0)
-    .configure_axis(grid=True, gridColor="#2a2a2a")
 )
-st.altair_chart(water_chart, use_container_width=True)
+
+# Goal line — tied to water axis values so it sits on the left scale
+_goal_df = pd.DataFrame({"date": _chart_dates, "water_ml": [DAILY_GOAL] * len(_chart_dates)})
+_goal_line = (
+    alt.Chart(_goal_df)
+    .mark_line(color="#FFF6E0", strokeDash=[5, 5], opacity=0.35, strokeWidth=1.5)
+    .encode(
+        x=alt.X("date:N", sort=None),
+        y=alt.Y("water_ml:Q", scale=alt.Scale(domain=[0, _y_water_max])),
+    )
+)
+
+# Mood line — right axis, independent scale
+_mood_plot_df = _unified_df.dropna(subset=["mood_score"]).copy()
+_mood_line = (
+    alt.Chart(_mood_plot_df)
+    .mark_line(color="#ffd23d", strokeWidth=2.5,
+               point=alt.OverlayMarkDef(color="#ffd23d", size=70, filled=True))
+    .encode(
+        x=alt.X("date:N", sort=None),
+        y=alt.Y("mood_score:Q",
+                title="Mood (1–10)",
+                scale=alt.Scale(domain=[1, 10]),
+                axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d", orient="right")),
+    )
+)
+
+_unified_chart = (
+    alt.layer(_water_bars, _goal_line, _mood_line)
+    .resolve_scale(y="independent")
+    .properties(height=300, padding={"left": 60, "right": 60, "top": 10, "bottom": 10})
+    .configure_view(strokeWidth=0, fill="#0D0D0D")
+    .configure_axis(grid=True, gridColor="#222222")
+)
+st.altair_chart(_unified_chart, use_container_width=True)
+st.caption("Red bars = water (ml, left axis)  ·  Yellow line = mood 1–10 (right axis)  ·  Dashed white = daily goal")
 
 # ---------- Intel Briefing + Captain Holt's Briefing, side by side ----------
 st.markdown("---")
@@ -977,12 +1045,9 @@ with intel_col:
 
 with holt_col:
     st.subheader("Captain Holt's Briefing")
-
-    # Escalated roast based on time since last entry today
     today_entries = data[data["Date"] == date.today()]
     escalation_msg = get_escalation_message(today_entries)
     st.markdown(f"<div class='custom-box' style='border-left-color:#FF4655;'>{escalation_msg}</div>", unsafe_allow_html=True)
-
     meme = random.choice(MEMES)
     st.markdown(
         f"<img src='{meme['url']}' style='width:100%; max-height:220px; object-fit:cover; "
@@ -992,70 +1057,11 @@ with holt_col:
     msg = random.choice(MESSAGES)
     st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
 
-# ---------- MONTHLY MOOD + WATER ----------
-st.markdown("---")
-st.subheader("Monthly Overview — Mood & Water")
-
-_now = datetime.now(TZ)
-month_col, year_col = st.columns([2, 1])
-with month_col:
-    selected_month = st.selectbox("Month", list(range(1, 13)),
-        index=_now.month - 1,
-        format_func=lambda m: datetime(2000, m, 1).strftime("%B"))
-with year_col:
-    selected_year = st.number_input("Year", min_value=2020, max_value=_now.year, value=_now.year)
-
-# Build daily water totals for selected month
-import calendar
-_, days_in_month = calendar.monthrange(selected_year, selected_month)
-month_dates = [date(selected_year, selected_month, d) for d in range(1, days_in_month + 1)]
-water_totals = [get_daily_total(data, d) for d in month_dates]
-month_mood_df = get_monthly_mood(load_moods(), selected_year, selected_month)
-
-overview_df = pd.DataFrame({
-    "date": [d.isoformat() for d in month_dates],
-    "water_ml": water_totals,
-})
-mood_map = {str(r["date"]): r["mood_score"] for _, r in month_mood_df.iterrows()} if not month_mood_df.empty else {}
-overview_df["mood_score"] = overview_df["date"].map(mood_map)
-
-water_bars = (
-    alt.Chart(overview_df)
-    .mark_bar(color="#FF4655", opacity=0.85, cornerRadiusTopLeft=2, cornerRadiusTopRight=2)
-    .encode(
-        x=alt.X("date:N", sort=None, title=None, axis=alt.Axis(labelColor="#FFF6E0", labelAngle=-45, labelFontSize=9)),
-        y=alt.Y("water_ml:Q", title="Water (ml)", scale=alt.Scale(domain=[0, max(DAILY_GOAL, int(overview_df["water_ml"].max()) + 100)]),
-                axis=alt.Axis(labelColor="#FFF6E0", titleColor="#FFF6E0")),
-    )
-)
-goal_line = (
-    alt.Chart(pd.DataFrame({"y": [DAILY_GOAL]}))
-    .mark_rule(color="#FFF6E0", strokeDash=[4, 4], opacity=0.4)
-    .encode(y="y:Q")
-)
-mood_line = (
-    alt.Chart(overview_df.dropna(subset=["mood_score"]))
-    .mark_line(color="#ffd23d", point=alt.OverlayMarkDef(color="#ffd23d", size=60), strokeWidth=2)
-    .encode(
-        x=alt.X("date:N", sort=None),
-        y=alt.Y("mood_score:Q", title="Mood (1–10)",
-                scale=alt.Scale(domain=[0, 10]),
-                axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d")),
-    )
-)
-combined = alt.layer(water_bars, goal_line, mood_line).resolve_scale(y="independent").properties(
-    height=280,
-    padding={"left": 55, "right": 55, "top": 10, "bottom": 10}
-).configure_view(strokeWidth=0).configure_axis(grid=True, gridColor="#2a2a2a")
-
-st.altair_chart(combined, use_container_width=True)
-st.caption("Red bars = water intake. Yellow line = mood (1 awful → 10 radiant). Dashed white line = daily goal.")
-
-# Report card for selected month
-report = get_report_card(data, load_moods(), selected_year, selected_month)
+# Report card — uses the selected month/year from the chart toggle above
+report = get_report_card(data, load_moods(), _rc_year, _rc_month)
 if report:
     st.markdown("---")
-    st.subheader(f"Report Card — {datetime(selected_year, selected_month, 1).strftime('%B %Y')}")
+    st.subheader(f"Report Card — {datetime(_rc_year, _rc_month, 1).strftime('%B %Y')}")
     grade_colors = {"S": "#ffd23d", "A": "#3ddc6f", "B": "#a8e06a", "C": "#ffd23d", "D": "#ff9d3d", "F": "#ff4655"}
     gc = grade_colors.get(report["grade"], "#FFF6E0")
     rc1, rc2 = st.columns([1, 3])
