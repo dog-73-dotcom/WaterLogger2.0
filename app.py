@@ -977,13 +977,17 @@ _water_bars = (
         x=alt.X("date:N", sort=None, title=None,
                 axis=alt.Axis(labelColor="#FFF6E0", labelAngle=_label_angle, labelFontSize=10)),
         y=alt.Y("water_ml:Q",
-                title="Water (ml)",
+                title="ml",
                 scale=alt.Scale(domain=[0, _y_water_max]),
-                axis=alt.Axis(labelColor="#FF4655", titleColor="#FF4655", orient="left")),
+                axis=alt.Axis(
+                    labelColor="#FF4655", titleColor="#FF4655", orient="left",
+                    titleAngle=0, titleAlign="right", titleX=-8, titleY=-8,
+                    labelPadding=4,
+                )),
     )
 )
 
-# Goal line — tied to water axis values so it sits on the left scale
+# Goal line — tied to water axis
 _goal_df = pd.DataFrame({"date": _chart_dates, "water_ml": [DAILY_GOAL] * len(_chart_dates)})
 _goal_line = (
     alt.Chart(_goal_df)
@@ -1003,16 +1007,20 @@ _mood_line = (
     .encode(
         x=alt.X("date:N", sort=None),
         y=alt.Y("mood_score:Q",
-                title="Mood (1–10)",
+                title="mood",
                 scale=alt.Scale(domain=[1, 10]),
-                axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d", orient="right")),
+                axis=alt.Axis(
+                    labelColor="#ffd23d", titleColor="#ffd23d", orient="right",
+                    titleAngle=0, titleAlign="left", titleX=8, titleY=-8,
+                    labelPadding=4, tickCount=9,
+                )),
     )
 )
 
 _unified_chart = (
     alt.layer(_water_bars, _goal_line, _mood_line)
     .resolve_scale(y="independent")
-    .properties(height=300, padding={"left": 60, "right": 60, "top": 10, "bottom": 10})
+    .properties(height=300, padding={"left": 70, "right": 70, "top": 20, "bottom": 10})
     .configure_view(strokeWidth=0, fill="#0D0D0D")
     .configure_axis(grid=True, gridColor="#222222")
 )
@@ -1050,8 +1058,7 @@ with holt_col:
     st.markdown(f"<div class='custom-box' style='border-left-color:#FF4655;'>{escalation_msg}</div>", unsafe_allow_html=True)
     meme = random.choice(MEMES)
     st.markdown(
-        f"<img src='{meme['url']}' style='width:100%; max-height:220px; object-fit:cover; "
-        f"border-radius:8px; border:1px solid var(--jw-red); margin-top:8px;' />",
+        f"<img src='{meme['url']}' style='width:100%; border-radius:8px; border:1px solid var(--jw-red); margin-top:8px;' />",
         unsafe_allow_html=True
     )
     msg = random.choice(MESSAGES)
