@@ -277,16 +277,16 @@ def delete_entries(ids):
 
 # ---------- MOOD ----------
 MOOD_OPTIONS = {
-    "Radiant — on top of the world": 10,
-    "Ascendant — genuinely great": 9,
-    "Really good": 8,
-    "Good": 7,
-    "Pretty okay": 6,
-    "Meh": 5,
-    "Not great": 4,
-    "Bad": 3,
-    "Awful": 2,
-    "Deceased — do not disturb": 1,
+    "10 — Radiant: on top of the world": 10,
+    "9 — Ascendant: genuinely great": 9,
+    "8 — Really good": 8,
+    "7 — Good": 7,
+    "6 — Pretty okay": 6,
+    "5 — Meh": 5,
+    "4 — Not great": 4,
+    "3 — Bad": 3,
+    "2 — Awful": 2,
+    "1 — Deceased: do not disturb": 1,
 }
 MOOD_COLORS = {
     10: "#3ddc6f", 9: "#5ee87a", 8: "#a8e06a", 7: "#c8e86a",
@@ -896,6 +896,23 @@ with col2:
             unsafe_allow_html=True
         )
 
+    # Notes log — shows all mood entries that have a note
+    st.markdown("---")
+    st.subheader("Notes")
+    _notes_df = mood_data[mood_data["note"].notna() & (mood_data["note"].str.strip() != "")].copy() if not mood_data.empty else pd.DataFrame()
+    if not _notes_df.empty:
+        _notes_df = _notes_df.sort_values("date", ascending=False)
+        for _, _nr in _notes_df.iterrows():
+            _nc = MOOD_COLORS.get(int(_nr["mood_score"]), "#FFF6E0")
+            st.markdown(
+                f"<div class='custom-box' style='border-left-color:{_nc}; margin-bottom:6px;'>"
+                f"<span style='font-size:11px; color:#c9c0a8;'>{_nr['date']} · {_nr['mood_label']}</span><br>"
+                f"{_nr['note']}</div>",
+                unsafe_allow_html=True
+            )
+    else:
+        st.caption("Notes you add when logging mood will appear here.")
+
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown("---")
 st.subheader(f"Match History — {view_date.isoformat()}")
@@ -987,14 +1004,14 @@ _water_bars = (
     )
 )
 
-# Goal line — tied to water axis
+# Goal line — tied to water scale, axis=None prevents it spawning its own right-side axis
 _goal_df = pd.DataFrame({"date": _chart_dates, "water_ml": [DAILY_GOAL] * len(_chart_dates)})
 _goal_line = (
     alt.Chart(_goal_df)
     .mark_line(color="#FFF6E0", strokeDash=[5, 5], opacity=0.35, strokeWidth=1.5)
     .encode(
         x=alt.X("date:N", sort=None),
-        y=alt.Y("water_ml:Q", scale=alt.Scale(domain=[0, _y_water_max])),
+        y=alt.Y("water_ml:Q", scale=alt.Scale(domain=[0, _y_water_max]), axis=None),
     )
 )
 
