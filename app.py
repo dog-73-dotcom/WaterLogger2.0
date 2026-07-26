@@ -23,7 +23,7 @@ OLD_CSV_FILE = "data.csv"
 DAILY_GOAL = 2000  # ml
 HISTORY_DAYS = 7
 TZ = pytz.timezone("Asia/Karachi")
-BIRTHDAY_MONTH_DAY = (8, 1)  # Aug 1
+BIRTHDAY_MONTH_DAY = (7, 26)  # TEMP TEST — change back to (8, 1) before gifting
 
 # ---------- ANNIVERSARY DATES ----------
 # (month, day, year_or_None, label, message)
