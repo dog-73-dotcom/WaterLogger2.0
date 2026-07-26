@@ -9,7 +9,7 @@ import pytz
 
 # ---------- CONFIG ----------
 st.set_page_config(
-    page_title="WaterYouDoing",
+    page_title="HydrAgent",
     page_icon="icon.png",
     layout="centered",
     initial_sidebar_state="auto"
@@ -558,195 +558,286 @@ def announce_entry(amount, now, data_after):
 if "refresh" not in st.session_state:
     st.session_state.refresh = 0
 
-# ---------- THEME: red / black / jasmine ----------
+# ---------- THEME: HydrAgent ----------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cormorant+Garamond:ital@1&family=Saira+Condensed:wght@700;800&display=swap');
 
 :root {
-    --jw-red: #B3001B;
-    --jw-red-bright: #FF4655;
-    --jw-black: #0D0D0D;
-    --jw-panel: #181818;
-    --jw-jasmine: #FFF6E0;
+    --red:      #B3001B;
+    --red-b:    #FF4655;
+    --black:    #0A0A0A;
+    --panel:    #141414;
+    --panel2:   #1C1C1C;
+    --jasmine:  #FFF6E0;
+    --muted:    #8A8070;
+    --border:   rgba(255,70,85,0.22);
 }
 
-html, body, [class*="css"] {
-    font-family: 'Rajdhani', sans-serif !important;
-}
+/* ── base ── */
+html, body, [class*="css"] { font-family: 'Rajdhani', sans-serif !important; }
 
 [data-testid="stAppViewContainer"] {
-    background-color: var(--jw-black);
+    background-color: var(--black);
     background-image:
-        radial-gradient(circle at 15% 20%, rgba(179,0,27,0.10) 0%, transparent 40%),
-        radial-gradient(circle at 85% 80%, rgba(179,0,27,0.08) 0%, transparent 45%),
-        repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 2px, transparent 14px);
+        radial-gradient(ellipse at 10% 0%,   rgba(179,0,27,0.13) 0%, transparent 45%),
+        radial-gradient(ellipse at 90% 100%, rgba(179,0,27,0.09) 0%, transparent 45%);
 }
-[data-testid="stHeader"] {
-    background-color: rgba(0,0,0,0);
+/* scanline overlay */
+[data-testid="stAppViewContainer"]::after {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0.07) 0px,
+        rgba(0,0,0,0.07) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+    z-index: 9999;
 }
+[data-testid="stHeader"] { background: transparent; }
 
+/* ── typography ── */
 h1, h2, h3, h4 {
-    color: var(--jw-jasmine) !important;
-    letter-spacing: 0.5px;
+    color: var(--jasmine) !important;
+    letter-spacing: 1px;
     text-transform: uppercase;
     font-weight: 700 !important;
+    font-size: 1rem !important;
 }
-.stMarkdown p, label, span {
-    color: var(--jw-jasmine) !important;
+h2 { font-size: 0.85rem !important; color: var(--muted) !important; }
+.stMarkdown p { color: var(--jasmine) !important; }
+label, .stCaption p { color: var(--muted) !important; font-size: 12px !important; }
+
+/* ── section cards ── */
+.section-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--red-b);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+.section-card-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--red-b);
+    margin-bottom: 10px;
 }
 
+/* ── custom divider ── */
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 14px 0;
+    opacity: 0.5;
+}
+.divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--red-b);
+}
+.divider-diamond {
+    width: 7px; height: 7px;
+    background: var(--red-b);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+}
+
+/* ── buttons ── */
 div.stButton > button {
     min-width: 90px;
-    padding: 8px 4px;
-    font-size: 15px;
-    margin: 2px 0px;
-    background-color: var(--jw-red);
-    color: var(--jw-jasmine);
-    border: 1px solid var(--jw-red-bright);
-    border-radius: 6px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    box-shadow: 0 3px 0 rgba(0,0,0,0.5);
-    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
-}
-div.stButton > button:hover {
-    background-color: var(--jw-red-bright);
-    color: var(--jw-black);
-    border: 1px solid var(--jw-jasmine);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 0 rgba(0,0,0,0.5);
-}
-div.stButton > button:active {
-    transform: translateY(1px);
-    box-shadow: 0 1px 0 rgba(0,0,0,0.5);
-}
-
-.custom-box {
-    background-color: var(--jw-panel);
-    color: var(--jw-jasmine);
-    padding: 10px 14px;
-    border-radius: 8px;
-    margin-top: 8px;
-    border-left: 4px solid var(--jw-red-bright);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-size: 16px;
-}
-
-.streak-box {
-    background: linear-gradient(135deg, var(--jw-red) 0%, var(--jw-black) 100%);
-    color: var(--jw-jasmine);
-    padding: 14px 18px;
-    border-radius: 10px;
-    border: 1px solid var(--jw-red-bright);
-    margin-bottom: 10px;
-    box-shadow: 0 6px 16px rgba(179,0,27,0.35);
-}
-.streak-box .big {
-    font-size: 28px;
-    font-weight: 700;
-}
-
-.rank-tag {
-    display: inline-block;
-    background-color: var(--jw-black);
-    color: var(--jw-red-bright);
-    border: 1px solid var(--jw-red-bright);
-    border-radius: 4px;
-    padding: 2px 10px;
-    font-size: 13px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--red);
+    color: var(--jasmine);
+    border: 1px solid var(--red-b);
+    border-radius: 5px;
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
-    margin-left: 4px;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+    transition: all 0.1s ease;
+}
+div.stButton > button:hover {
+    background: var(--red-b);
+    color: var(--black);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 0 rgba(0,0,0,0.6), 0 0 12px rgba(255,70,85,0.35);
+}
+div.stButton > button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.6);
 }
 
+/* ── inputs ── */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input {
+    background: var(--panel2) !important;
+    border: 1px solid rgba(255,70,85,0.35) !important;
+    border-radius: 5px !important;
+    color: var(--jasmine) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 15px !important;
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus {
+    border-color: var(--red-b) !important;
+    box-shadow: 0 0 0 2px rgba(255,70,85,0.18) !important;
+}
+[data-baseweb="select"] > div,
+[data-baseweb="select"] > div:focus-within {
+    background: var(--panel2) !important;
+    border: 1px solid rgba(255,70,85,0.35) !important;
+    border-radius: 5px !important;
+}
+[data-baseweb="select"] span { color: var(--jasmine) !important; font-family: 'Rajdhani', sans-serif !important; }
+[data-baseweb="popover"] { background: var(--panel2) !important; border: 1px solid var(--red-b) !important; }
+[data-baseweb="menu"] { background: var(--panel2) !important; }
+[data-baseweb="option"]:hover { background: rgba(255,70,85,0.15) !important; }
+[data-testid="stNumberInput"] button {
+    background: var(--panel2) !important;
+    border-color: rgba(255,70,85,0.25) !important;
+    color: var(--jasmine) !important;
+}
+[data-testid="stDateInput"] > div > div { background: var(--panel2) !important; border-color: rgba(255,70,85,0.35) !important; }
+
+/* ── custom message boxes ── */
+.custom-box {
+    background: var(--panel2);
+    color: var(--jasmine);
+    padding: 10px 14px;
+    border-radius: 7px;
+    margin-top: 6px;
+    border-left: 3px solid var(--red-b);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+/* ── progress bar (hidden — replaced with custom HTML) ── */
+[data-testid="stProgress"] { display: none !important; }
+
+/* ── streak boxes ── */
+.streak-box {
+    color: var(--jasmine);
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid;
+    margin-bottom: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+.streak-box .streak-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.75;
+    margin-bottom: 4px;
+}
+.streak-box .big { font-size: 30px; font-weight: 800; line-height: 1; }
+.streak-box .rank-sub { font-size: 11px; opacity: 0.6; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+
+/* ── rank tag ── */
+.rank-tag {
+    display: inline-block;
+    background: var(--black);
+    color: var(--red-b);
+    border: 1px solid var(--red-b);
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-left: 6px;
+    box-shadow: 0 0 8px rgba(255,70,85,0.2);
+}
+
+/* ── title ── */
 .app-title {
     font-family: 'Saira Condensed', sans-serif;
     font-weight: 800;
-    font-size: 44px;
+    font-size: 46px;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--jw-jasmine);
-    text-shadow: 0 0 14px rgba(255,70,85,0.55), 2px 2px 0 rgba(0,0,0,0.5);
-    transform: skewX(-6deg);
+    letter-spacing: 3px;
+    color: var(--jasmine);
+    text-shadow: 0 0 18px rgba(255,70,85,0.5), 2px 2px 0 rgba(0,0,0,0.6);
+    transform: skewX(-5deg);
     display: inline-block;
     line-height: 1;
 }
-.app-title-wrap {
-    position: relative;
-    padding-bottom: 6px;
-}
 .app-title-underline {
-    height: 4px;
-    width: 220px;
-    background: linear-gradient(90deg, var(--jw-red-bright), transparent);
-    margin-top: 2px;
+    height: 3px;
+    width: 240px;
+    background: linear-gradient(90deg, var(--red-b), transparent);
+    margin-top: 4px;
 }
 
+/* ── HUD banner ── */
 .hud-banner {
-    border-radius: 8px;
-    padding: 10px 16px;
-    margin: 10px 0 16px 0;
+    border-radius: 6px;
+    padding: 9px 16px;
+    margin: 8px 0 12px 0;
     font-weight: 700;
-    letter-spacing: 0.5px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
     border: 1px solid;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
 }
 
-.badge-locked {
-    opacity: 0.35;
-    filter: grayscale(1);
-}
+/* ── badge cards ── */
+.badge-locked { opacity: 0.28; filter: grayscale(1); }
 .badge-card {
-    background-color: var(--jw-panel);
-    border: 1px solid var(--jw-red);
+    background: var(--panel);
+    border: 1px solid rgba(255,70,85,0.25);
     border-radius: 8px;
-    padding: 10px;
+    padding: 10px 6px;
     text-align: center;
     margin-bottom: 6px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.35);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.badge-card:hover {
-    transform: translateY(-3px) scale(1.03);
-    box-shadow: 0 8px 18px rgba(255,70,85,0.25);
-}
-.badge-card .icon {
-    font-size: 26px;
-}
-.badge-card .name {
-    color: var(--jw-jasmine);
-    font-size: 13px;
+.badge-card:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 8px 18px rgba(255,70,85,0.25); }
+.badge-card .icon { font-size: 24px; }
+.badge-card .name { color: var(--jasmine); font-size: 12px; font-weight: 700; margin-top: 4px; }
+.badge-card .desc { color: var(--muted); font-size: 10px; font-family: 'Cormorant Garamond', serif; font-style: italic; }
+
+/* ── custom table ── */
+.ha-table { width: 100%; border-collapse: collapse; font-family: 'Rajdhani', sans-serif; font-size: 14px; }
+.ha-table th {
+    background: var(--red);
+    color: var(--jasmine);
+    padding: 7px 12px;
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
     font-weight: 700;
 }
-.badge-card .desc {
-    color: #c9c0a8;
-    font-size: 11px;
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-}
+.ha-table td { padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--jasmine); }
+.ha-table tr:hover td { background: rgba(255,70,85,0.07); }
+.ha-table tr:last-child td { border-bottom: none; }
 
-[data-testid="stProgress"] > div > div {
-    background-color: var(--jw-red-bright) !important;
-}
-
-hr {
-    border-color: rgba(255,70,85,0.25) !important;
-    margin: 0.5rem 0 !important;
-}
-
-/* tighten default Streamlit spacing so more fits without scrolling */
-.block-container {
-    padding-top: 2rem !important;
-    padding-bottom: 2rem !important;
-}
-[data-testid="stVerticalBlock"] {
-    gap: 0.6rem !important;
-}
+/* ── misc ── */
+hr { border-color: rgba(255,70,85,0.15) !important; margin: 0.5rem 0 !important; }
+.block-container { padding-top: 1.8rem !important; padding-bottom: 2rem !important; }
+[data-testid="stVerticalBlock"] { gap: 0.55rem !important; }
+[data-testid="stRadio"] label { font-size: 13px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -761,7 +852,7 @@ current_rank = get_rank(stats["current_streak"])
 st.markdown(f"""
 <div class="app-title-wrap">
   <div style="display:flex; align-items:center; gap:14px;">
-    <div class="app-title">WaterYouDoing</div>
+    <div class="app-title">HydrAgent</div>
     <span class="rank-tag">{current_rank}</span>
   </div>
   <div class="app-title-underline"></div>
@@ -780,9 +871,7 @@ for label, msg in anniversary_hits:
         unsafe_allow_html=True
     )
 
-st.caption(f"Daily goal: **{DAILY_GOAL} ml**")
-
-# HUD status banner — reflects today's hydration before any column split
+# HUD status banner
 _today_total_for_hud = get_daily_total(data, date.today())
 _label, _subtext = get_hud_status(_today_total_for_hud, DAILY_GOAL)
 _hud_colors = {
@@ -794,22 +883,39 @@ _hud_colors = {
 _bg, _border = _hud_colors[_label]
 st.markdown(f"""
 <div class="hud-banner" style="background-color:{_bg}; border-color:{_border}; color:{_border};">
-    STATUS: {_label} — {_subtext}
+    STATUS: {_label} — {_subtext} &nbsp;·&nbsp; GOAL: {DAILY_GOAL} ML
 </div>
 """, unsafe_allow_html=True)
 
-# Streak banner
+RANK_COLORS = {
+    "Iron": ("#3a3a3a", "#9a9a9a"),
+    "Bronze": ("#3d2a1a", "#cd7f32"),
+    "Silver": ("#2a2d30", "#c0c0c0"),
+    "Gold": ("#3d3400", "#ffd700"),
+    "Platinum": ("#1a2d2d", "#4fc3c3"),
+    "Diamond": ("#1a1a3d", "#6a9de0"),
+    "Ascendant": ("#1a2d1a", "#4fc34f"),
+    "Immortal": ("#3d1a2d", "#c34f9d"),
+    "Radiant": ("#3d2d00", "#ffd23d"),
+}
 streak_cols = st.columns(2)
 with streak_cols[0]:
+    _sbg, _sac = RANK_COLORS.get(current_rank, ("#2a0a0a", "#FF4655"))
     st.markdown(f"""
-    <div class="streak-box">
-        Current Streak<br><span class="big">{stats['current_streak']} day{'s' if stats['current_streak'] != 1 else ''}</span>
+    <div class="streak-box" style="background:linear-gradient(135deg,{_sbg} 0%,#0A0A0A 100%); border-color:{_sac}; box-shadow:0 6px 18px {_sac}33;">
+        <div class="streak-label" style="color:{_sac};">Current Streak</div>
+        <div class="big" style="color:{_sac};">{stats['current_streak']} day{'s' if stats['current_streak'] != 1 else ''}</div>
+        <div class="rank-sub" style="color:{_sac};">{current_rank}</div>
     </div>
     """, unsafe_allow_html=True)
 with streak_cols[1]:
+    _best_rank = get_rank(stats["best_streak"])
+    _bbg, _bac = RANK_COLORS.get(_best_rank, ("#2a0a0a", "#FF4655"))
     st.markdown(f"""
-    <div class="streak-box">
-        Best Streak<br><span class="big">{stats['best_streak']} day{'s' if stats['best_streak'] != 1 else ''}</span>
+    <div class="streak-box" style="background:linear-gradient(135deg,{_bbg} 0%,#0A0A0A 100%); border-color:{_bac}; box-shadow:0 6px 18px {_bac}33;">
+        <div class="streak-label" style="color:{_bac};">Best Streak</div>
+        <div class="big" style="color:{_bac};">{stats['best_streak']} day{'s' if stats['best_streak'] != 1 else ''}</div>
+        <div class="rank-sub" style="color:{_bac};">Peak: {_best_rank}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -823,7 +929,7 @@ col1, col2 = st.columns(2)
 
 # ---------- LEFT COLUMN: quick add + mood ----------
 with col1:
-    st.subheader("Buy Phase — Stock Up")
+    st.markdown(f'<div class="section-card-label">Buy Phase — Stock Up</div>', unsafe_allow_html=True)
 
     quick_amounts = [250, 500]
     quick_cols = st.columns(len(quick_amounts))
@@ -847,8 +953,8 @@ with col1:
             announce_entry(custom_amount, now, data)
             st.session_state.refresh += 1
 
-    st.markdown("---")
-    st.subheader("Daily Mood")
+    st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-card-label">Daily Mood</div>', unsafe_allow_html=True)
 
     mood_data = load_moods()
     existing_score, existing_label, existing_note = get_mood_for_date(mood_data, date.today())
@@ -877,19 +983,29 @@ with col1:
 
 # ---------- RIGHT COLUMN: today's status ----------
 with col2:
-    st.subheader("Mission Status")
+    st.markdown(f'<div class="section-card-label">Mission Status</div>', unsafe_allow_html=True)
 
     total_today = get_daily_total(data, view_date)
     st.write(f"Total for {view_date.isoformat()}: **{total_today} ml**")
 
     progress_val = min(total_today / DAILY_GOAL, 1)
-    st.progress(progress_val)
-    st.write(f"{int(progress_val * 100)}% of {DAILY_GOAL} ml")
+    _pct = int(progress_val * 100)
+    _bar_color = "#3ddc6f" if _pct >= 100 else "#FF4655" if _pct < 25 else "#ffd23d" if _pct < 60 else "#FF4655"
+    st.markdown(f"""
+    <div style="margin:6px 0 4px 0;">
+        <div style="background:#1C1C1C; border-radius:4px; height:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.08);">
+            <div style="width:{_pct}%; height:100%; background:linear-gradient(90deg,{_bar_color},{_bar_color}cc);
+                        border-radius:4px; transition:width 0.4s ease;"></div>
+        </div>
+        <div style="font-size:12px; color:#8A8070; margin-top:4px; letter-spacing:1px;">{_pct}% — {total_today} / {DAILY_GOAL} ML</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.progress(progress_val)  # hidden by CSS, keeps Streamlit state happy
 
     # Best/worst day of week
     best_dow, worst_dow = get_weekly_best_worst(data)
     if best_dow and worst_dow:
-        st.markdown("---")
+        st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
         st.markdown(
             f"<div class='custom-box'>Best day: <b>{best_dow}</b><br>"
             f"Worst day: <b>{worst_dow}</b> — classic.</div>",
@@ -897,8 +1013,8 @@ with col2:
         )
 
     # Notes log — shows all mood entries that have a note
-    st.markdown("---")
-    st.subheader("Notes")
+    st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-card-label">Notes</div>', unsafe_allow_html=True)
     _notes_df = mood_data[mood_data["note"].notna() & (mood_data["note"].str.strip() != "")].copy() if not mood_data.empty else pd.DataFrame()
     if not _notes_df.empty:
         _notes_df = _notes_df.sort_values("date", ascending=False)
@@ -914,8 +1030,8 @@ with col2:
         st.caption("Notes you add when logging mood will appear here.")
 
 # ---------- FULL-WIDTH: Match History ----------
-st.markdown("---")
-st.subheader(f"Match History — {view_date.isoformat()}")
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="section-card-label">Match History — {view_date.isoformat()}</div>', unsafe_allow_html=True)
 data = load_data()
 view_df = data[data["Date"] == view_date].copy()
 
@@ -925,11 +1041,17 @@ if not view_df.empty:
         lambda t: datetime.strptime(str(t), "%H:%M:%S").strftime("%I:%M %p")
     )
 
-    st.dataframe(
-        view_df_display[["id", "Time", "Amount (ml)"]].rename(columns={"id": "ID"}),
-        use_container_width=True,
-        hide_index=True
+    rows_html = "".join(
+        f"<tr><td>{int(r['id'])}</td><td>{datetime.strptime(str(r['Time']), '%H:%M:%S').strftime('%I:%M %p')}</td>"
+        f"<td>{int(r['Amount (ml)'])} ml</td></tr>"
+        for _, r in view_df_display.iterrows()
     )
+    st.markdown(f"""
+    <table class="ha-table">
+        <thead><tr><th>ID</th><th>Time</th><th>Amount</th></tr></thead>
+        <tbody>{rows_html}</tbody>
+    </table>
+    """, unsafe_allow_html=True)
 
     to_delete = st.multiselect("Select rows to delete (ID)", view_df_display["id"])
 
@@ -945,8 +1067,8 @@ else:
 
 # ---------- FULL-WIDTH: unified water + mood dual-axis chart ----------
 import calendar
-st.markdown("---")
-st.subheader("Water & Mood")
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="section-card-label">Water & Mood</div>', unsafe_allow_html=True)
 
 _now = datetime.now(TZ)
 view_mode = st.radio("Period", ["Last 7 days", "Monthly"], horizontal=True, label_visibility="collapsed")
@@ -1045,11 +1167,11 @@ st.altair_chart(_unified_chart, use_container_width=True)
 st.caption("Red bars = water (ml, left axis)  ·  Yellow line = mood 1–10 (right axis)  ·  Dashed white = daily goal")
 
 # ---------- Intel Briefing + Captain Holt's Briefing, side by side ----------
-st.markdown("---")
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
 intel_col, holt_col = st.columns(2)
 
 with intel_col:
-    st.subheader("Intel Briefing — Week vs Week")
+    st.markdown(f'<div class="section-card-label">Intel Briefing — Week vs Week</div>', unsafe_allow_html=True)
     this_week = get_week_avg(data, 0)
     last_week = get_week_avg(data, 1)
     if last_week > 0:
@@ -1069,7 +1191,7 @@ with intel_col:
         )
 
 with holt_col:
-    st.subheader("Captain Holt's Briefing")
+    st.markdown('<div class="section-card-label">Captain Holt&#39;s Briefing</div>', unsafe_allow_html=True)
     today_entries = data[data["Date"] == date.today()]
     escalation_msg = get_escalation_message(today_entries)
     st.markdown(f"<div class='custom-box' style='border-left-color:#FF4655;'>{escalation_msg}</div>", unsafe_allow_html=True)
@@ -1084,8 +1206,8 @@ with holt_col:
 # Report card — uses the selected month/year from the chart toggle above
 report = get_report_card(data, load_moods(), _rc_year, _rc_month)
 if report:
-    st.markdown("---")
-    st.subheader(f"Report Card — {datetime(_rc_year, _rc_month, 1).strftime('%B %Y')}")
+    st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-card-label">Report Card — {datetime(_rc_year, _rc_month, 1).strftime('%B %Y')}</div>', unsafe_allow_html=True)
     grade_colors = {"S": "#ffd23d", "A": "#3ddc6f", "B": "#a8e06a", "C": "#ffd23d", "D": "#ff9d3d", "F": "#ff4655"}
     gc = grade_colors.get(report["grade"], "#FFF6E0")
     rc1, rc2 = st.columns([1, 3])
@@ -1112,8 +1234,8 @@ if report:
 
 
 # ---------- BADGES ----------
-st.markdown("---")
-st.subheader("Loadout Unlocks")
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="section-card-label">Loadout Unlocks</div>', unsafe_allow_html=True)
 unlocked = get_unlocked_badges(stats)
 unlocked_ids = {b["id"] for b in unlocked}
 st.write(f"Unlocked: **{len(unlocked)} / {len(BADGES)}**")
@@ -1133,6 +1255,6 @@ for idx, badge in enumerate(BADGES):
         """, unsafe_allow_html=True)
 
 # Raw data toggle
-st.markdown("---")
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
 if st.checkbox("Show raw data (DB)"):
     st.dataframe(load_data(), use_container_width=True)
