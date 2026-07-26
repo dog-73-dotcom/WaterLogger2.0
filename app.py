@@ -972,17 +972,6 @@ for label, msg in anniversary_hits:
         unsafe_allow_html=True
     )
 
-# Admin time-capsule messages (shown once on their delivery date)
-_admin_msgs = get_todays_admin_messages()
-for _am in _admin_msgs:
-    st.markdown(
-        f"<div class='custom-box' style='border-left-color:#ffd23d; font-size:15px; "
-        f"background:linear-gradient(135deg,#1a1400,#141414);'>"
-        f"<span style='font-size:10px; letter-spacing:2px; color:#ffd23d; text-transform:uppercase;'>Message for you</span>"
-        f"<br>{_am}</div>",
-        unsafe_allow_html=True
-    )
-
 # HUD status banner
 _today_total_for_hud = get_daily_total(data, date.today())
 _label, _subtext = get_hud_status(_today_total_for_hud, DAILY_GOAL)
@@ -1173,6 +1162,19 @@ with col2:
             )
     else:
         st.caption("Notes you add when logging mood will appear here.")
+
+    # Admin time-capsule messages — shown below notes on delivery date
+    _admin_msgs = get_todays_admin_messages()
+    if _admin_msgs:
+        st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-card-label" style="color:#ffd23d;">Message for you</div>', unsafe_allow_html=True)
+        for _am in _admin_msgs:
+            st.markdown(
+                f"<div class='custom-box' style='border-left-color:#ffd23d; "
+                f"background:linear-gradient(135deg,#1a1400,#141414);'>"
+                f"{_am}</div>",
+                unsafe_allow_html=True
+            )
 
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
