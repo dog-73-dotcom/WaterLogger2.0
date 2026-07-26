@@ -1074,13 +1074,6 @@ with col1:
     existing_score, existing_label, existing_note = get_mood_for_date(mood_data, date.today())
 
     if existing_label:
-        mood_color = MOOD_COLORS[existing_score]
-        st.markdown(
-            f"<div class='custom-box' style='border-left-color:{mood_color};'>"
-            f"Today: <b>{existing_label}</b>"
-            f"{(' — ' + existing_note) if existing_note else ''}</div>",
-            unsafe_allow_html=True
-        )
         st.caption("Update today's mood below:")
 
     mood_choice = st.selectbox(
@@ -1163,18 +1156,21 @@ with col2:
     else:
         st.caption("Notes you add when logging mood will appear here.")
 
-    # Admin time-capsule messages — shown below notes on delivery date
-    _admin_msgs = get_todays_admin_messages()
-    if _admin_msgs:
-        st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-card-label" style="color:#ffd23d;">Message for you</div>', unsafe_allow_html=True)
-        for _am in _admin_msgs:
-            st.markdown(
-                f"<div class='custom-box' style='border-left-color:#ffd23d; "
-                f"background:linear-gradient(135deg,#1a1400,#141414);'>"
-                f"{_am}</div>",
-                unsafe_allow_html=True
-            )
+    # Admin time-capsule messages — always visible below notes
+    _all_admin = get_all_admin_messages()
+    if not _all_admin.empty:
+        _pending = _all_admin[_all_admin["delivered"] == 0].sort_values("deliver_date")
+        if not _pending.empty:
+            st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-card-label" style="color:#ffd23d;">Messages for you</div>', unsafe_allow_html=True)
+            for _, _mr in _pending.iterrows():
+                st.markdown(
+                    f"<div class='custom-box' style='border-left-color:#ffd23d; "
+                    f"background:linear-gradient(135deg,#1a1400,#141414);'>"
+                    f"<span style='font-size:10px; color:#8A8070; letter-spacing:1px;'>{_mr['deliver_date']}</span><br>"
+                    f"{_mr['message']}</div>",
+                    unsafe_allow_html=True
+                )
 
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
