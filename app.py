@@ -371,10 +371,10 @@ def get_escalation_message(df_today):
     if df_today.empty:
         return ESCALATION_TIERS[-1][2][-1]  # nothing logged at all — max tier
 
-    # Get the latest entry time today
     now = datetime.now(TZ)
     last_time = df_today["Time"].max()
-    last_dt = datetime.combine(date.today(), last_time)
+    # Localize last_dt to same timezone as now so subtraction works
+    last_dt = TZ.localize(datetime.combine(date.today(), last_time))
     hours_since = (now - last_dt).total_seconds() / 3600
 
     for low, high, msgs in ESCALATION_TIERS:
