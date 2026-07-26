@@ -34,7 +34,7 @@ ANNIVERSARIES = [
      "One year of courage. Still takes more guts to hit 2000ml a day apparently."),
     (9, 15, 2025, "The ILY",
      "Said it {years} year{s} ago. The app remembers even if you pretend not to. Drink water."),
-    (8, 1, 2007, "Birthday",
+    (BIRTHDAY_MONTH_DAY[0], BIRTHDAY_MONTH_DAY[1], 2007, "Birthday",
      "Another year older. Another year of questionable hydration decisions. Happy birthday. 🎂"),
 ]
 
