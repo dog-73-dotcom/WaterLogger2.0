@@ -206,6 +206,14 @@ def init_db():
                     note TEXT
                 )
             """))
+            conn.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS admin_messages (
+                    id SERIAL PRIMARY KEY,
+                    deliver_date TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    delivered INTEGER NOT NULL DEFAULT 0
+                )
+            """))
         else:
             conn.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS entries (
@@ -222,6 +230,14 @@ def init_db():
                     mood_score INTEGER NOT NULL,
                     mood_label TEXT NOT NULL,
                     note TEXT
+                )
+            """))
+            conn.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS admin_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    deliver_date TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    delivered INTEGER NOT NULL DEFAULT 0
                 )
             """))
 
@@ -485,18 +501,103 @@ def get_streaks(goal_days):
 
 def get_stats(df):
     goal_days = get_goal_days(df)
-    current_streak, best_streak = get_streaks(goal_days)
+    current_streak, best_streak, grace_yesterday = get_grace_status(df)
     return {
         "lifetime_ml": int(df["Amount (ml)"].sum()) if not df.empty else 0,
         "lifetime_entries": int(len(df)),
         "days_hit_goal": len(goal_days),
         "current_streak": current_streak,
         "best_streak": best_streak,
+        "grace_yesterday": grace_yesterday,
     }
 
 
 def get_unlocked_badges(stats):
     return [b for b in BADGES if b["check"](stats)]
+
+
+# ---------- ADMIN MESSAGES ----------
+ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
+
+def save_admin_message(deliver_date, message):
+    with ENGINE.begin() as conn:
+        conn.execute(sa.text(
+            "INSERT INTO admin_messages (deliver_date, message, delivered) VALUES (:d, :m, 0)"
+        ), {"d": str(deliver_date), "m": message})
+
+
+def get_todays_admin_messages():
+    today = str(date.today())
+    try:
+        with ENGINE.begin() as conn:
+            rows = conn.execute(sa.text(
+                "SELECT id, message FROM admin_messages WHERE deliver_date = :d AND delivered = 0"
+            ), {"d": today}).fetchall()
+            # Mark as delivered
+            for row in rows:
+                conn.execute(sa.text(
+                    "UPDATE admin_messages SET delivered = 1 WHERE id = :i"
+                ), {"i": row[0]})
+        return [r[1] for r in rows]
+    except Exception:
+        return []
+
+
+def get_all_admin_messages():
+    try:
+        df = pd.read_sql("SELECT * FROM admin_messages ORDER BY deliver_date DESC", ENGINE)
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+# ---------- GRACE PERIOD ----------
+GRACE_ML = 200  # within this much of goal counts as "close call"
+
+def get_grace_status(df):
+    """
+    Returns (streak, best_streak, grace_yesterday) where grace_yesterday is True
+    if yesterday missed goal by <= GRACE_ML (streak is preserved but warned).
+    """
+    yesterday = date.today() - timedelta(days=1)
+    yesterday_total = get_daily_total(df, yesterday)
+    grace_yesterday = (
+        yesterday_total > 0 and
+        (DAILY_GOAL - GRACE_ML) <= yesterday_total < DAILY_GOAL
+    )
+
+    # Build goal_days including yesterday if in grace period
+    goal_days = get_goal_days(df)
+    effective_goal_days = set(goal_days)
+    if grace_yesterday:
+        effective_goal_days.add(yesterday)
+
+    current, best = get_streaks(effective_goal_days)
+    return current, best, grace_yesterday
+
+
+# ---------- HYDRATION FORECAST ----------
+def get_hydration_forecast(df_today, daily_goal):
+    """
+    Based on entries so far today, estimate total by midnight.
+    Returns (forecast_ml, on_track, hours_remaining).
+    """
+    now = datetime.now(TZ)
+    midnight = now.replace(hour=23, minute=59, second=59)
+    hours_elapsed = now.hour + now.minute / 60
+    hours_remaining = max(0, 24 - hours_elapsed)
+
+    if df_today.empty or hours_elapsed < 0.5:
+        return None, None, hours_remaining
+
+    total_so_far = int(df_today["Amount (ml)"].sum()) if "Amount (ml)" in df_today.columns else 0
+    if total_so_far == 0 or hours_elapsed == 0:
+        return None, None, hours_remaining
+
+    rate_per_hour = total_so_far / hours_elapsed
+    forecast = int(total_so_far + rate_per_hour * hours_remaining)
+    on_track = forecast >= daily_goal
+    return forecast, on_track, hours_remaining
 
 
 RANKS = [
@@ -871,6 +972,17 @@ for label, msg in anniversary_hits:
         unsafe_allow_html=True
     )
 
+# Admin time-capsule messages (shown once on their delivery date)
+_admin_msgs = get_todays_admin_messages()
+for _am in _admin_msgs:
+    st.markdown(
+        f"<div class='custom-box' style='border-left-color:#ffd23d; font-size:15px; "
+        f"background:linear-gradient(135deg,#1a1400,#141414);'>"
+        f"<span style='font-size:10px; letter-spacing:2px; color:#ffd23d; text-transform:uppercase;'>Message for you</span>"
+        f"<br>{_am}</div>",
+        unsafe_allow_html=True
+    )
+
 # HUD status banner
 _today_total_for_hud = get_daily_total(data, date.today())
 _label, _subtext = get_hud_status(_today_total_for_hud, DAILY_GOAL)
@@ -901,11 +1013,13 @@ RANK_COLORS = {
 streak_cols = st.columns(2)
 with streak_cols[0]:
     _sbg, _sac = RANK_COLORS.get(current_rank, ("#2a0a0a", "#FF4655"))
+    _grace_note = "<div class='rank-sub' style='color:#ff9d3d;'>⚠ close call yesterday</div>" if stats.get("grace_yesterday") else ""
     st.markdown(f"""
     <div class="streak-box" style="background:linear-gradient(135deg,{_sbg} 0%,#0A0A0A 100%); border-color:{_sac}; box-shadow:0 6px 18px {_sac}33;">
         <div class="streak-label" style="color:{_sac};">Current Streak</div>
         <div class="big" style="color:{_sac};">{stats['current_streak']} day{'s' if stats['current_streak'] != 1 else ''}</div>
         <div class="rank-sub" style="color:{_sac};">{current_rank}</div>
+        {_grace_note}
     </div>
     """, unsafe_allow_html=True)
 with streak_cols[1]:
@@ -918,6 +1032,17 @@ with streak_cols[1]:
         <div class="rank-sub" style="color:{_bac};">Peak: {_best_rank}</div>
     </div>
     """, unsafe_allow_html=True)
+
+if stats.get("grace_yesterday"):
+    yesterday = date.today() - timedelta(days=1)
+    y_total = get_daily_total(data, yesterday)
+    shortfall = DAILY_GOAL - y_total
+    st.markdown(
+        f"<div class='custom-box' style='border-left-color:#ff9d3d; font-size:13px;'>"
+        f"⚠ Yesterday you hit <b>{y_total} ml</b> — only <b>{shortfall} ml</b> short of the goal. "
+        f"Streak preserved for now. Don't make it a habit.</div>",
+        unsafe_allow_html=True
+    )
 
 # view_date is needed below, so define it before the column split
 view_date = st.date_input("View date", value=date.today())
@@ -1001,6 +1126,26 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
     st.progress(progress_val)  # hidden by CSS, keeps Streamlit state happy
+
+    # Hydration forecast
+    _today_entries = data[data["Date"] == date.today()]
+    _forecast, _on_track, _hrs_left = get_hydration_forecast(_today_entries, DAILY_GOAL)
+    if _forecast is not None:
+        _shortfall = max(0, DAILY_GOAL - _forecast)
+        if _on_track:
+            _fc_color = "#3ddc6f"
+            _fc_msg = f"On track — forecast <b>{_forecast} ml</b> by midnight."
+        else:
+            _fc_color = "#ff9d3d"
+            _fc_msg = (
+                f"At this rate: <b>{_forecast} ml</b> by midnight. "
+                f"Short by <b>{_shortfall} ml</b>. Pick up the pace."
+            )
+        st.markdown(
+            f"<div class='custom-box' style='border-left-color:{_fc_color}; font-size:13px; margin-top:6px;'>"
+            f"📈 {_fc_msg}</div>",
+            unsafe_allow_html=True
+        )
 
     # Best/worst day of week
     best_dow, worst_dow = get_weekly_best_worst(data)
@@ -1258,3 +1403,35 @@ for idx, badge in enumerate(BADGES):
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
 if st.checkbox("Show raw data (DB)"):
     st.dataframe(load_data(), use_container_width=True)
+
+# ---------- ADMIN PANEL (hidden, password-gated) ----------
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+with st.expander("⚙ Admin"):
+    _pw = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Password")
+    if _pw == ADMIN_PASSWORD:
+        st.markdown('<div class="section-card-label">Write a time-capsule message</div>', unsafe_allow_html=True)
+        _am_date = st.date_input("Deliver on", value=date.today() + timedelta(days=1), key="admin_date")
+        _am_text = st.text_area("Message", placeholder="Write something they'll see on that date...", key="admin_msg")
+        if st.button("Schedule message", key="admin_send"):
+            if _am_text.strip():
+                save_admin_message(_am_date, _am_text.strip())
+                st.success(f"Scheduled for {_am_date.isoformat()}")
+            else:
+                st.warning("Message can't be empty.")
+
+        st.markdown('<div class="section-card-label" style="margin-top:14px;">Scheduled messages</div>', unsafe_allow_html=True)
+        _all_msgs = get_all_admin_messages()
+        if not _all_msgs.empty:
+            for _, _mr in _all_msgs.iterrows():
+                _status = "✓ delivered" if _mr["delivered"] else "pending"
+                _sc = "#3ddc6f" if _mr["delivered"] else "#ffd23d"
+                st.markdown(
+                    f"<div class='custom-box' style='border-left-color:{_sc}; font-size:13px;'>"
+                    f"<span style='color:#8A8070; font-size:11px;'>{_mr['deliver_date']} · {_status}</span><br>"
+                    f"{_mr['message']}</div>",
+                    unsafe_allow_html=True
+                )
+        else:
+            st.caption("No messages scheduled yet.")
+    elif _pw:
+        st.error("Wrong password.")
