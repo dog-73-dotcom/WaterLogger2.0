@@ -526,21 +526,17 @@ def save_admin_message(deliver_date, message):
         ), {"d": str(deliver_date), "m": message})
 
 
-def get_todays_admin_messages():
+def get_unlocked_admin_messages():
+    """Return all messages whose deliver_date has arrived — visible from that date onward."""
     today = str(date.today())
     try:
-        with ENGINE.begin() as conn:
-            rows = conn.execute(sa.text(
-                "SELECT id, message FROM admin_messages WHERE deliver_date = :d AND delivered = 0"
-            ), {"d": today}).fetchall()
-            # Mark as delivered
-            for row in rows:
-                conn.execute(sa.text(
-                    "UPDATE admin_messages SET delivered = 1 WHERE id = :i"
-                ), {"i": row[0]})
-        return [r[1] for r in rows]
+        df = pd.read_sql(
+            "SELECT * FROM admin_messages WHERE deliver_date <= :d ORDER BY deliver_date ASC",
+            ENGINE, params={"d": today}
+        )
+        return df if not df.empty else pd.DataFrame()
     except Exception:
-        return []
+        return pd.DataFrame()
 
 
 def get_all_admin_messages():
@@ -1156,21 +1152,19 @@ with col2:
     else:
         st.caption("Notes you add when logging mood will appear here.")
 
-    # Admin time-capsule messages — always visible below notes
-    _all_admin = get_all_admin_messages()
-    if not _all_admin.empty:
-        _pending = _all_admin[_all_admin["delivered"] == 0].sort_values("deliver_date")
-        if not _pending.empty:
-            st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="section-card-label" style="color:#ffd23d;">Messages for you</div>', unsafe_allow_html=True)
-            for _, _mr in _pending.iterrows():
-                st.markdown(
-                    f"<div class='custom-box' style='border-left-color:#ffd23d; "
-                    f"background:linear-gradient(135deg,#1a1400,#141414);'>"
-                    f"<span style='font-size:10px; color:#8A8070; letter-spacing:1px;'>{_mr['deliver_date']}</span><br>"
-                    f"{_mr['message']}</div>",
-                    unsafe_allow_html=True
-                )
+    # Admin time-capsule messages — visible from their deliver_date onward
+    _unlocked = get_unlocked_admin_messages()
+    if not _unlocked.empty:
+        st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-card-label" style="color:#ffd23d;">Messages for you</div>', unsafe_allow_html=True)
+        for _, _mr in _unlocked.iterrows():
+            st.markdown(
+                f"<div class='custom-box' style='border-left-color:#ffd23d; "
+                f"background:linear-gradient(135deg,#1a1400,#141414);'>"
+                f"<span style='font-size:10px; color:#8A8070; letter-spacing:1px;'>{_mr['deliver_date']}</span><br>"
+                f"{_mr['message']}</div>",
+                unsafe_allow_html=True
+            )
 
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
