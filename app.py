@@ -1042,7 +1042,7 @@ if not view_df.empty:
     )
 
     rows_html = "".join(
-        f"<tr><td>{int(r['id'])}</td><td>{datetime.strptime(str(r['Time']), '%H:%M:%S').strftime('%I:%M %p')}</td>"
+        f"<tr><td>{int(r['id'])}</td><td>{r['Time']}</td>"
         f"<td>{int(r['Amount (ml)'])} ml</td></tr>"
         for _, r in view_df_display.iterrows()
     )
