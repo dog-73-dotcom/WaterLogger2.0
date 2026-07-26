@@ -527,12 +527,14 @@ def save_admin_message(deliver_date, message):
 
 
 def get_unlocked_admin_messages():
-    """Return all messages whose deliver_date has arrived — visible from that date onward."""
-    today = str(date.today())
+    """Return messages whose deliver_date has arrived and haven't expired (within 5 days)."""
+    today = date.today()
+    cutoff = str(today - timedelta(days=5))
+    today_str = str(today)
     try:
         df = pd.read_sql(
-            "SELECT * FROM admin_messages WHERE deliver_date <= :d ORDER BY deliver_date ASC",
-            ENGINE, params={"d": today}
+            "SELECT * FROM admin_messages WHERE deliver_date <= :t AND deliver_date >= :c ORDER BY deliver_date ASC",
+            ENGINE, params={"t": today_str, "c": cutoff}
         )
         return df if not df.empty else pd.DataFrame()
     except Exception:
@@ -962,11 +964,22 @@ anniversary_hits = get_anniversary_message(today_now)
 for label, msg in anniversary_hits:
     if label == "Birthday":
         st.balloons()
-    st.markdown(
-        f"<div class='custom-box' style='border-left-color:#ffd23d; font-size:15px;'>"
-        f"<b>{label}</b> — {msg}</div>",
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            f"<div class='custom-box' style='border-left-color:#ffd23d; "
+            f"background:linear-gradient(135deg,#2a1f00,#141414); "
+            f"padding:18px 20px;'>"
+            f"<div style='font-family:Saira Condensed,sans-serif; font-size:28px; font-weight:800; "
+            f"color:#ffd23d; letter-spacing:2px; text-transform:uppercase; line-height:1.1;'>"
+            f"Happy Birthday 🎂</div>"
+            f"<div style='font-size:16px; margin-top:8px; color:#FFF6E0;'>{msg}</div></div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"<div class='custom-box' style='border-left-color:#ffd23d; font-size:15px;'>"
+            f"<b>{label}</b> — {msg}</div>",
+            unsafe_allow_html=True
+        )
 
 # HUD status banner
 _today_total_for_hud = get_daily_total(data, date.today())
