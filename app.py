@@ -330,9 +330,13 @@ def save_mood(target_date, mood_label, note=""):
 
 def load_moods():
     try:
-        df = pd.read_sql("SELECT * FROM moods ORDER BY date DESC", ENGINE)
-        if df.empty:
+        with ENGINE.connect() as conn:
+            result = conn.execute(sa.text("SELECT * FROM moods ORDER BY date DESC"))
+            rows = result.fetchall()
+            cols = result.keys()
+        if not rows:
             return pd.DataFrame(columns=["id", "date", "mood_score", "mood_label", "note"])
+        df = pd.DataFrame(rows, columns=list(cols))
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
         return df
     except Exception:
@@ -532,19 +536,30 @@ def get_unlocked_admin_messages():
     cutoff = str(today - timedelta(days=5))
     today_str = str(today)
     try:
-        df = pd.read_sql(
-            "SELECT * FROM admin_messages WHERE deliver_date <= :t AND deliver_date >= :c ORDER BY deliver_date ASC",
-            ENGINE, params={"t": today_str, "c": cutoff}
-        )
-        return df if not df.empty else pd.DataFrame()
+        with ENGINE.connect() as conn:
+            result = conn.execute(sa.text(
+                "SELECT * FROM admin_messages WHERE deliver_date <= :t AND deliver_date >= :c ORDER BY deliver_date ASC"
+            ), {"t": today_str, "c": cutoff})
+            rows = result.fetchall()
+            cols = result.keys()
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=list(cols))
     except Exception:
         return pd.DataFrame()
 
 
 def get_all_admin_messages():
     try:
-        df = pd.read_sql("SELECT * FROM admin_messages ORDER BY deliver_date DESC", ENGINE)
-        return df
+        with ENGINE.connect() as conn:
+            result = conn.execute(sa.text(
+                "SELECT * FROM admin_messages ORDER BY deliver_date DESC"
+            ))
+            rows = result.fetchall()
+            cols = result.keys()
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows, columns=list(cols))
     except Exception:
         return pd.DataFrame()
 
