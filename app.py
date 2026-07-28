@@ -22,7 +22,7 @@ DB_FILE = "data.db"
 OLD_CSV_FILE = "data.csv"
 DAILY_GOAL = 2000  # ml
 HISTORY_DAYS = 7
-TZ = pytz.timezone("Asia/Karachi")
+TZ = pytz.timezone("Asia/Muscat")  # Oman (UTC+4)
 BIRTHDAY_MONTH_DAY = (8, 1)  # Aug 1
 
 # ---------- ANNIVERSARY DATES ----------
@@ -389,13 +389,18 @@ def get_anniversary_message(today):
 def get_escalation_message(df_today):
     """Return a roast based on how long since the last water entry today."""
     if df_today.empty:
-        return ESCALATION_TIERS[-1][2][-1]  # nothing logged at all — max tier
+        return ESCALATION_TIERS[-1][2][-1]
 
     now = datetime.now(TZ)
     last_time = df_today["Time"].max()
-    # Localize last_dt to same timezone as now so subtraction works
-    last_dt = TZ.localize(datetime.combine(date.today(), last_time))
-    hours_since = (now - last_dt).total_seconds() / 3600
+    if last_time is None or str(last_time) == "NaT":
+        return ESCALATION_TIERS[-1][2][-1]
+
+    try:
+        last_dt = TZ.localize(datetime.combine(date.today(), last_time))
+        hours_since = (now - last_dt).total_seconds() / 3600
+    except Exception:
+        return ESCALATION_TIERS[0][2][0]
 
     for low, high, msgs in ESCALATION_TIERS:
         if low <= hours_since < high:
@@ -596,7 +601,6 @@ def get_hydration_forecast(df_today, daily_goal):
     Returns (forecast_ml, on_track, hours_remaining).
     """
     now = datetime.now(TZ)
-    midnight = now.replace(hour=23, minute=59, second=59)
     hours_elapsed = now.hour + now.minute / 60
     hours_remaining = max(0, 24 - hours_elapsed)
 
@@ -1166,7 +1170,11 @@ with col2:
     # Notes log — shows all mood entries that have a note
     st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-card-label">Notes</div>', unsafe_allow_html=True)
-    _notes_df = mood_data[mood_data["note"].notna() & (mood_data["note"].str.strip() != "")].copy() if not mood_data.empty else pd.DataFrame()
+    _notes_df = mood_data[
+        mood_data["note"].notna() &
+        (mood_data["note"].astype(str).str.strip() != "") &
+        (mood_data["note"].astype(str) != "None")
+    ].copy() if not mood_data.empty else pd.DataFrame()
     if not _notes_df.empty:
         _notes_df = _notes_df.sort_values("date", ascending=False)
         for _, _nr in _notes_df.iterrows():
