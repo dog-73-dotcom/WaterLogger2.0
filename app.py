@@ -9,7 +9,7 @@ import pytz
 
 # ---------- CONFIG ----------
 st.set_page_config(
-    page_title="HydrAgent",
+    page_title="Testing Page",
     page_icon="icon.png",
     layout="centered",
     initial_sidebar_state="auto"
@@ -554,7 +554,7 @@ def get_unlocked_badges(stats):
 
 
 # ---------- ADMIN MESSAGES ----------
-ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
+ADMIN_PASSWORD = "Testing Page2025"  # change this before gifting
 
 # ---------- USERS ----------
 # Names and PINs — PINs stored here for simplicity, change before going live
@@ -732,7 +732,7 @@ if st.session_state.user_id is None:
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="login-title">HydrAgent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">Testing Page</div>', unsafe_allow_html=True)
     st.markdown('<div class="login-underline"></div>', unsafe_allow_html=True)
     st.markdown('<div class="login-sub">Identify yourself, Agent.</div>', unsafe_allow_html=True)
 
@@ -752,7 +752,7 @@ _uid = st.session_state.user_id
 _uname = USERS[_uid]["name"]
 _ucolor = USERS[_uid]["color"]
 
-# ---------- THEME: HydrAgent ----------
+# ---------- THEME: Testing Page ----------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cormorant+Garamond:ital@1&family=Saira+Condensed:wght@700;800&display=swap');
@@ -1046,7 +1046,7 @@ current_rank = get_rank(stats["current_streak"])
 st.markdown(f"""
 <div class="app-title-wrap">
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-    <div class="app-title">HydrAgent</div>
+    <div class="app-title">Testing Page</div>
     <span class="rank-tag">{current_rank}</span>
     <span style="font-family:Rajdhani,sans-serif; font-size:13px; color:{_ucolor};
                  letter-spacing:2px; text-transform:uppercase; margin-left:4px;">
