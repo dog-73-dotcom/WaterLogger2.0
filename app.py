@@ -1273,7 +1273,7 @@ with col2:
         filtered["_author_color"] = author_color
         return filtered
 
-    _my_notes = _extract_notes(mood_data, _my_name, _ucolor)
+    _my_notes = pd.DataFrame()  # don't show your own notes to yourself
     _other_notes = _extract_notes(load_moods(_other_uid), _other_name, _other_color)
 
     _all_notes = pd.concat([_my_notes, _other_notes], ignore_index=True)
