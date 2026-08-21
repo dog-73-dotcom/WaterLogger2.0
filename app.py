@@ -9,7 +9,7 @@ import pytz
 
 # ---------- CONFIG ----------
 st.set_page_config(
-    page_title="Testing Page",
+    page_title="HydrAgent",
     page_icon="icon.png",
     layout="centered",
     initial_sidebar_state="auto"
@@ -554,13 +554,13 @@ def get_unlocked_badges(stats):
 
 
 # ---------- ADMIN MESSAGES ----------
-ADMIN_PASSWORD = "Testing Page2025"  # change this before gifting
+ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
 
 # ---------- USERS ----------
 # Names and PINs — PINs stored here for simplicity, change before going live
 USERS = {
-    "1": {"name": "Talha",   "pin": "9989", "color": "#FF4655"},
-    "2": {"name": "Bisma", "pin": "0108", "color": "#4FC3F7"},
+    "1": {"name": "Hana",   "pin": "1234", "color": "#FF4655"},
+    "2": {"name": "Farhan", "pin": "5678", "color": "#4FC3F7"},
 }
 
 def save_admin_message(deliver_date, message):
@@ -732,12 +732,12 @@ if st.session_state.user_id is None:
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="login-title">Testing Page</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">HydrAgent</div>', unsafe_allow_html=True)
     st.markdown('<div class="login-underline"></div>', unsafe_allow_html=True)
     st.markdown('<div class="login-sub">Identify yourself, Agent.</div>', unsafe_allow_html=True)
 
     for uid, udata in USERS.items():
-        with st.expander(f"{udata['name']}"):
+        with st.expander(f"I'm {udata['name']}"):
             pin_input = st.text_input("PIN", type="password", key=f"pin_{uid}", placeholder="Enter your PIN")
             if st.button(f"Enter as {udata['name']}", key=f"login_{uid}"):
                 if pin_input == udata["pin"]:
@@ -752,7 +752,7 @@ _uid = st.session_state.user_id
 _uname = USERS[_uid]["name"]
 _ucolor = USERS[_uid]["color"]
 
-# ---------- THEME: Testing Page ----------
+# ---------- THEME: HydrAgent ----------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cormorant+Garamond:ital@1&family=Saira+Condensed:wght@700;800&display=swap');
@@ -1046,7 +1046,7 @@ current_rank = get_rank(stats["current_streak"])
 st.markdown(f"""
 <div class="app-title-wrap">
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-    <div class="app-title">Testing Page</div>
+    <div class="app-title">HydrAgent</div>
     <span class="rank-tag">{current_rank}</span>
     <span style="font-family:Rajdhani,sans-serif; font-size:13px; color:{_ucolor};
                  letter-spacing:2px; text-transform:uppercase; margin-left:4px;">
@@ -1254,23 +1254,43 @@ with col2:
     # Notes log — shows all mood entries that have a note
     st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-card-label">Notes</div>', unsafe_allow_html=True)
-    _notes_df = mood_data[
-        mood_data["note"].notna() &
-        (mood_data["note"].astype(str).str.strip() != "") &
-        (mood_data["note"].astype(str) != "None")
-    ].copy() if not mood_data.empty else pd.DataFrame()
-    if not _notes_df.empty:
-        _notes_df = _notes_df.sort_values("date", ascending=False)
-        for _, _nr in _notes_df.iterrows():
+
+    # Load notes from both users, tag with who wrote them
+    _other_uid = [u for u in USERS if u != _uid][0]
+    _other_name = USERS[_other_uid]["name"]
+    _other_color = USERS[_other_uid]["color"]
+    _my_name = _uname
+
+    def _extract_notes(df, author_name, author_color):
+        if df.empty:
+            return pd.DataFrame()
+        filtered = df[
+            df["note"].notna() &
+            (df["note"].astype(str).str.strip() != "") &
+            (df["note"].astype(str) != "None")
+        ].copy()
+        filtered["_author"] = author_name
+        filtered["_author_color"] = author_color
+        return filtered
+
+    _my_notes = _extract_notes(mood_data, _my_name, _ucolor)
+    _other_notes = _extract_notes(load_moods(_other_uid), _other_name, _other_color)
+
+    _all_notes = pd.concat([_my_notes, _other_notes], ignore_index=True)
+
+    if not _all_notes.empty:
+        _all_notes = _all_notes.sort_values("date", ascending=False)
+        for _, _nr in _all_notes.iterrows():
             _nc = MOOD_COLORS.get(int(_nr["mood_score"]), "#FFF6E0")
+            _author_label = f" · <span style='color:{_nr['_author_color']};'>{_nr['_author']}</span>"
             st.markdown(
                 f"<div class='custom-box' style='border-left-color:{_nc}; margin-bottom:6px;'>"
-                f"<span style='font-size:11px; color:#c9c0a8;'>{_nr['date']} · {_nr['mood_label']}</span><br>"
+                f"<span style='font-size:11px; color:#c9c0a8;'>{_nr['date']} · {_nr['mood_label']}{_author_label}</span><br>"
                 f"{_nr['note']}</div>",
                 unsafe_allow_html=True
             )
     else:
-        st.caption("Notes you add when logging mood will appear here.")
+        st.caption("Notes logged with mood will appear here.")
 
     # Admin time-capsule messages — visible from their deliver_date onward
     _unlocked = get_unlocked_admin_messages()
