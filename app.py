@@ -737,7 +737,7 @@ if st.session_state.user_id is None:
     st.markdown('<div class="login-sub">Identify yourself, Agent.</div>', unsafe_allow_html=True)
 
     for uid, udata in USERS.items():
-        with st.expander(f"I'm {udata['name']}"):
+        with st.expander(f"{udata['name']}"):
             pin_input = st.text_input("PIN", type="password", key=f"pin_{uid}", placeholder="Enter your PIN")
             if st.button(f"Enter as {udata['name']}", key=f"login_{uid}"):
                 if pin_input == udata["pin"]:
