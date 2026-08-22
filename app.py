@@ -1382,7 +1382,7 @@ for _d in _chart_dates:
         if _d in _mmap:
             _mood_rows_chart.append({"date": _d, "user": _mu, "mood": _mmap[_d], "color": _mc})
 
-_stack_df = pd.DataFrame(_stack_rows)
+_stack_df = pd.DataFrame(_stack_rows) if _stack_rows else pd.DataFrame(columns=["date","portion","amount","color","label"])
 _y_max = max(DAILY_GOAL, int(_stack_df.groupby("date")["amount"].sum().max()) if not _stack_df.empty else 0)
 
 # Stacked bars — shared base + winner's extra on top
@@ -1430,28 +1430,33 @@ _goal_line = (
 
 # Mood lines per user — right axis
 _mood_chart_df = pd.DataFrame(_mood_rows_chart) if _mood_rows_chart else pd.DataFrame()
-_mood_lines = (
-    alt.Chart(_mood_chart_df)
-    .mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=50, filled=True))
-    .encode(
-        x=alt.X("date:N", sort=None),
-        y=alt.Y("mood:Q", title="mood",
-                scale=alt.Scale(domain=[1, 10]),
-                axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d",
-                              orient="right", titleAngle=0,
-                              titleAlign="left", titleX=8, titleY=-8,
-                              labelPadding=4, tickCount=9)),
-        color=alt.Color("user:N",
-                        scale=alt.Scale(domain=["Cat", "Dog"], range=["#FF4655", "#4FC3F7"]),
-                        legend=None),
-        strokeDash=alt.StrokeDash("user:N",
-                                   scale=alt.Scale(domain=["Cat", "Dog"],
-                                                   range=[[1, 0], [4, 2]])),
+
+_base_layers = [_bars, _goal_line]
+
+if not _mood_chart_df.empty:
+    _mood_lines = (
+        alt.Chart(_mood_chart_df)
+        .mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=50, filled=True))
+        .encode(
+            x=alt.X("date:N", sort=None),
+            y=alt.Y("mood:Q", title="mood",
+                    scale=alt.Scale(domain=[1, 10]),
+                    axis=alt.Axis(labelColor="#ffd23d", titleColor="#ffd23d",
+                                  orient="right", titleAngle=0,
+                                  titleAlign="left", titleX=8, titleY=-8,
+                                  labelPadding=4, tickCount=9)),
+            color=alt.Color("user:N",
+                            scale=alt.Scale(domain=["Cat", "Dog"], range=["#FF4655", "#4FC3F7"]),
+                            legend=None),
+            strokeDash=alt.StrokeDash("user:N",
+                                       scale=alt.Scale(domain=["Cat", "Dog"],
+                                                       range=[[1, 0], [4, 2]])),
+        )
     )
-) if not _mood_chart_df.empty else alt.Chart(pd.DataFrame({"date": [], "mood": []})).mark_line()
+    _base_layers.append(_mood_lines)
 
 _comp_chart = (
-    alt.layer(_bars, _goal_line, _mood_lines)
+    alt.layer(*_base_layers)
     .resolve_scale(y="independent", color="independent")
     .properties(height=300, padding={"left": 65, "right": 65, "top": 20, "bottom": 10})
     .configure_view(strokeWidth=0, fill="#0D0D0D")
