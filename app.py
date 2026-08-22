@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import sqlalchemy as sa
-import os
 import random
 from datetime import datetime, date, timedelta
 import pytz
@@ -18,8 +17,6 @@ st.markdown("""
 <link rel="manifest" href="manifest.json">
 """, unsafe_allow_html=True)
 
-DB_FILE = "data.db"
-OLD_CSV_FILE = "data.csv"
 DAILY_GOAL = 2000  # ml
 HISTORY_DAYS = 7
 TZ = pytz.timezone("Asia/Muscat")  # Oman (UTC+4)
@@ -178,7 +175,7 @@ BADGES = [
 def get_engine():
     if "postgres" in st.secrets:
         return sa.create_engine(st.secrets["postgres"]["url"], pool_pre_ping=True)
-    return sa.create_engine(f"sqlite:///{DB_FILE}")
+    return sa.create_engine("sqlite:///data.db")
 
 
 ENGINE = get_engine()
@@ -186,7 +183,7 @@ IS_POSTGRES = ENGINE.dialect.name == "postgresql"
 
 
 def init_db():
-    """Create the table if it doesn't exist, and migrate an old local CSV once if present."""
+    """Create tables if they don't exist, add user_id column if missing."""
     with ENGINE.begin() as conn:
         if IS_POSTGRES:
             conn.execute(sa.text("""
@@ -194,16 +191,19 @@ def init_db():
                     id SERIAL PRIMARY KEY,
                     date TEXT NOT NULL,
                     time TEXT NOT NULL,
-                    amount_ml INTEGER NOT NULL
+                    amount_ml INTEGER NOT NULL,
+                    user_id TEXT NOT NULL DEFAULT '1'
                 )
             """))
             conn.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS moods (
                     id SERIAL PRIMARY KEY,
-                    date TEXT NOT NULL UNIQUE,
+                    date TEXT NOT NULL,
                     mood_score INTEGER NOT NULL,
                     mood_label TEXT NOT NULL,
-                    note TEXT
+                    note TEXT,
+                    user_id TEXT NOT NULL DEFAULT '1',
+                    UNIQUE(date, user_id)
                 )
             """))
             conn.execute(sa.text("""
@@ -214,22 +214,31 @@ def init_db():
                     delivered INTEGER NOT NULL DEFAULT 0
                 )
             """))
+            # Safely add user_id to existing tables if missing
+            for tbl in ["entries", "moods"]:
+                try:
+                    conn.execute(sa.text(f"ALTER TABLE {tbl} ADD COLUMN user_id TEXT NOT NULL DEFAULT '1'"))
+                except Exception:
+                    pass  # column already exists
         else:
             conn.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date TEXT NOT NULL,
                     time TEXT NOT NULL,
-                    amount_ml INTEGER NOT NULL
+                    amount_ml INTEGER NOT NULL,
+                    user_id TEXT NOT NULL DEFAULT '1'
                 )
             """))
             conn.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS moods (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT NOT NULL UNIQUE,
+                    date TEXT NOT NULL,
                     mood_score INTEGER NOT NULL,
                     mood_label TEXT NOT NULL,
-                    note TEXT
+                    note TEXT,
+                    user_id TEXT NOT NULL DEFAULT '1',
+                    UNIQUE(date, user_id)
                 )
             """))
             conn.execute(sa.text("""
@@ -240,54 +249,53 @@ def init_db():
                     delivered INTEGER NOT NULL DEFAULT 0
                 )
             """))
-
-    if os.path.exists(OLD_CSV_FILE):
-        with ENGINE.begin() as conn:
-            count = conn.execute(sa.text("SELECT COUNT(*) FROM entries")).scalar()
-            if count == 0:
+            for tbl in ["entries", "moods"]:
                 try:
-                    old_df = pd.read_csv(OLD_CSV_FILE)
-                    if {"Date", "Time", "Amount (ml)"}.issubset(old_df.columns):
-                        for _, row in old_df.iterrows():
-                            conn.execute(
-                                sa.text("INSERT INTO entries (date, time, amount_ml) VALUES (:d, :t, :a)"),
-                                {"d": str(row["Date"]), "t": str(row["Time"]), "a": int(row["Amount (ml)"])}
-                            )
-                    os.rename(OLD_CSV_FILE, OLD_CSV_FILE + ".migrated.bak")
+                    conn.execute(sa.text(f"ALTER TABLE {tbl} ADD COLUMN user_id TEXT NOT NULL DEFAULT '1'"))
                 except Exception:
                     pass
 
 
-def load_data():
-    df = pd.read_sql("SELECT * FROM entries", ENGINE)
 
-    if df.empty:
+def load_data(user_id="1"):
+    try:
+        with ENGINE.connect() as conn:
+            result = conn.execute(sa.text(
+                "SELECT * FROM entries WHERE user_id = :uid"
+            ), {"uid": user_id})
+            rows = result.fetchall()
+            cols = result.keys()
+        if not rows:
+            return pd.DataFrame(columns=["id", "Date", "Time", "Amount (ml)"])
+        df = pd.DataFrame(rows, columns=list(cols))
+    except Exception:
         return pd.DataFrame(columns=["id", "Date", "Time", "Amount (ml)"])
-
     df["Date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
     df["Time"] = pd.to_datetime(df["time"], errors="coerce").dt.time
     df["Time"] = df["Time"].fillna(datetime.strptime("00:00:00", "%H:%M:%S").time())
     df["Amount (ml)"] = pd.to_numeric(df["amount_ml"], errors="coerce").fillna(0).astype(int)
-
     return df[["id", "Date", "Time", "Amount (ml)"]]
 
 
-def add_entry(amount_ml):
+def add_entry(amount_ml, user_id="1"):
     now = datetime.now(TZ)
     with ENGINE.begin() as conn:
         conn.execute(
-            sa.text("INSERT INTO entries (date, time, amount_ml) VALUES (:d, :t, :a)"),
-            {"d": now.date().isoformat(), "t": now.time().replace(microsecond=0).isoformat(), "a": int(amount_ml)}
+            sa.text("INSERT INTO entries (date, time, amount_ml, user_id) VALUES (:d, :t, :a, :uid)"),
+            {"d": now.date().isoformat(), "t": now.time().replace(microsecond=0).isoformat(),
+             "a": int(amount_ml), "uid": user_id}
         )
     return now
 
 
-def delete_entries(ids):
+def delete_entries(ids, user_id="1"):
     if not ids:
         return False
     with ENGINE.begin() as conn:
         for i in ids:
-            conn.execute(sa.text("DELETE FROM entries WHERE id = :i"), {"i": int(i)})
+            conn.execute(sa.text(
+                "DELETE FROM entries WHERE id = :i AND user_id = :uid"
+            ), {"i": int(i), "uid": user_id})
     return True
 
 
@@ -311,27 +319,29 @@ MOOD_COLORS = {
 }
 
 
-def save_mood(target_date, mood_label, note=""):
+def save_mood(target_date, mood_label, note="", user_id="1"):
     score = MOOD_OPTIONS[mood_label]
     with ENGINE.begin() as conn:
         if IS_POSTGRES:
             conn.execute(sa.text("""
-                INSERT INTO moods (date, mood_score, mood_label, note)
-                VALUES (:d, :s, :l, :n)
-                ON CONFLICT (date) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
-            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note})
+                INSERT INTO moods (date, mood_score, mood_label, note, user_id)
+                VALUES (:d, :s, :l, :n, :uid)
+                ON CONFLICT (date, user_id) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
+            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note, "uid": user_id})
         else:
             conn.execute(sa.text("""
-                INSERT INTO moods (date, mood_score, mood_label, note)
-                VALUES (:d, :s, :l, :n)
-                ON CONFLICT(date) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
-            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note})
+                INSERT INTO moods (date, mood_score, mood_label, note, user_id)
+                VALUES (:d, :s, :l, :n, :uid)
+                ON CONFLICT(date, user_id) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
+            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note, "uid": user_id})
 
 
-def load_moods():
+def load_moods(user_id="1"):
     try:
         with ENGINE.connect() as conn:
-            result = conn.execute(sa.text("SELECT * FROM moods ORDER BY date DESC"))
+            result = conn.execute(sa.text(
+                "SELECT * FROM moods WHERE user_id = :uid ORDER BY date DESC"
+            ), {"uid": user_id})
             rows = result.fetchall()
             cols = result.keys()
         if not rows:
@@ -528,6 +538,13 @@ def get_unlocked_badges(stats):
 # ---------- ADMIN MESSAGES ----------
 ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
 
+# ---------- USERS ----------
+# Names and PINs — PINs stored here for simplicity, change before going live
+USERS = {
+    "1": {"name": "Cat",   "pin": "1234", "color": "#FF4655"},
+    "2": {"name": "Dog", "pin": "5678", "color": "#4FC3F7"},
+}
+
 def save_admin_message(deliver_date, message):
     with ENGINE.begin() as conn:
         conn.execute(sa.text(
@@ -675,6 +692,47 @@ def announce_entry(amount, now, data_after):
 # ---------- SESSION ----------
 if "refresh" not in st.session_state:
     st.session_state.refresh = 0
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+
+# ---------- LOGIN SCREEN ----------
+# Shows before anything else until a user authenticates
+if st.session_state.user_id is None:
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@800&family=Rajdhani:wght@600&display=swap');
+    [data-testid="stAppViewContainer"] { background:#0A0A0A; }
+    [data-testid="stHeader"] { background:transparent; }
+    .login-title {
+        font-family:'Saira Condensed',sans-serif; font-size:52px; font-weight:800;
+        text-transform:uppercase; letter-spacing:3px; color:#FFF6E0;
+        text-shadow:0 0 20px rgba(255,70,85,0.5); transform:skewX(-5deg);
+        display:inline-block; margin-bottom:4px;
+    }
+    .login-sub { font-family:'Rajdhani',sans-serif; color:#8A8070; font-size:14px; letter-spacing:2px; text-transform:uppercase; margin-bottom:32px; }
+    .login-underline { height:3px; width:260px; background:linear-gradient(90deg,#FF4655,transparent); margin-bottom:28px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="login-title">HydrAgent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-underline"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-sub">Identify yourself, Agent.</div>', unsafe_allow_html=True)
+
+    for uid, udata in USERS.items():
+        with st.expander(f"{udata['name']}"):
+            pin_input = st.text_input("PIN", type="password", key=f"pin_{uid}", placeholder="Enter your PIN")
+            if st.button(f"Enter as {udata['name']}", key=f"login_{uid}"):
+                if pin_input == udata["pin"]:
+                    st.session_state.user_id = uid
+                    st.rerun()
+                else:
+                    st.error("Wrong PIN.")
+    st.stop()
+
+# User is logged in — get their info
+_uid = st.session_state.user_id
+_uname = USERS[_uid]["name"]
+_ucolor = USERS[_uid]["color"]
 
 # ---------- THEME: HydrAgent ----------
 st.markdown("""
@@ -962,20 +1020,28 @@ hr { border-color: rgba(255,70,85,0.15) !important; margin: 0.5rem 0 !important;
 # ---------- UI ----------
 # Init + load
 init_db()
-data = load_data()
-mood_data = load_moods()
+data = load_data(_uid)
+mood_data = load_moods(_uid)
 stats = get_stats(data)
 current_rank = get_rank(stats["current_streak"])
 
 st.markdown(f"""
 <div class="app-title-wrap">
-  <div style="display:flex; align-items:center; gap:14px;">
+  <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
     <div class="app-title">HydrAgent</div>
     <span class="rank-tag">{current_rank}</span>
+    <span style="font-family:Rajdhani,sans-serif; font-size:13px; color:{_ucolor};
+                 letter-spacing:2px; text-transform:uppercase; margin-left:4px;">
+      ● {_uname}
+    </span>
   </div>
   <div class="app-title-underline"></div>
 </div>
 """, unsafe_allow_html=True)
+
+if st.button("Switch user", key="logout"):
+    st.session_state.user_id = None
+    st.rerun()
 
 # Anniversary + birthday messages
 today_now = date.today()
@@ -1078,8 +1144,8 @@ with col1:
     for idx, amt in enumerate(quick_amounts):
         with quick_cols[idx]:
             if st.button(f"+{amt} ml", key=f"quick_{amt}"):
-                now = add_entry(amt)
-                data = load_data()
+                now = add_entry(amt, _uid)
+                data = load_data(_uid)
                 stats = get_stats(data)
                 announce_entry(amt, now, data)
                 st.session_state.refresh += 1
@@ -1089,8 +1155,8 @@ with col1:
         if custom_amount <= 0:
             st.warning("Stop trying stupid things, lil bro")
         else:
-            now = add_entry(custom_amount)
-            data = load_data()
+            now = add_entry(custom_amount, _uid)
+            data = load_data(_uid)
             stats = get_stats(data)
             announce_entry(custom_amount, now, data)
             st.session_state.refresh += 1
@@ -1098,7 +1164,7 @@ with col1:
     st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-card-label">Daily Mood</div>', unsafe_allow_html=True)
 
-    mood_data = load_moods()
+    mood_data = load_moods(_uid)
     existing_score, existing_label, existing_note = get_mood_for_date(mood_data, date.today())
 
     if existing_label:
@@ -1112,7 +1178,7 @@ with col1:
     )
     mood_note = st.text_input("Add a note (optional)", value=existing_note or "", placeholder="rough day, headache, good vibes...")
     if st.button("Log mood"):
-        save_mood(date.today(), mood_choice, mood_note)
+        save_mood(date.today(), mood_choice, mood_note, _uid)
         st.success(f"Mood logged: {mood_choice}")
         st.session_state.refresh += 1
 
@@ -1170,23 +1236,45 @@ with col2:
     # Notes log — shows all mood entries that have a note
     st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-card-label">Notes</div>', unsafe_allow_html=True)
-    _notes_df = mood_data[
-        mood_data["note"].notna() &
-        (mood_data["note"].astype(str).str.strip() != "") &
-        (mood_data["note"].astype(str) != "None")
-    ].copy() if not mood_data.empty else pd.DataFrame()
-    if not _notes_df.empty:
-        _notes_df = _notes_df.sort_values("date", ascending=False)
-        for _, _nr in _notes_df.iterrows():
+
+    # Load notes from both users, tag with who wrote them
+    _other_uid = [u for u in USERS if u != _uid][0]
+    _other_name = USERS[_other_uid]["name"]
+    _other_color = USERS[_other_uid]["color"]
+    _my_name = _uname
+
+    def _extract_notes(df, author_name, author_color):
+        if df.empty:
+            return pd.DataFrame()
+        _cutoff = date.today() - timedelta(days=3)
+        filtered = df[
+            df["note"].notna() &
+            (df["note"].astype(str).str.strip() != "") &
+            (df["note"].astype(str) != "None") &
+            (df["date"] >= _cutoff)
+        ].copy()
+        filtered["_author"] = author_name
+        filtered["_author_color"] = author_color
+        return filtered
+
+    _my_notes = pd.DataFrame()  # don't show your own notes to yourself
+    _other_notes = _extract_notes(load_moods(_other_uid), _other_name, _other_color)
+
+    _all_notes = pd.concat([_my_notes, _other_notes], ignore_index=True)
+
+    if not _all_notes.empty:
+        _all_notes = _all_notes.sort_values("date", ascending=False)
+        for _, _nr in _all_notes.iterrows():
             _nc = MOOD_COLORS.get(int(_nr["mood_score"]), "#FFF6E0")
+            _author_label = f" · <span style='color:{_nr['_author_color']};'>{_nr['_author']}</span>"
             st.markdown(
                 f"<div class='custom-box' style='border-left-color:{_nc}; margin-bottom:6px;'>"
-                f"<span style='font-size:11px; color:#c9c0a8;'>{_nr['date']} · {_nr['mood_label']}</span><br>"
+                f"<span style='font-size:11px; color:#c9c0a8;'>{_nr['date']} · {_nr['mood_label']}{_author_label}</span><br>"
                 f"{_nr['note']}</div>",
                 unsafe_allow_html=True
             )
     else:
-        st.caption("Notes you add when logging mood will appear here.")
+        st.caption("Notes logged with mood will appear here.")
 
     # Admin time-capsule messages — visible from their deliver_date onward
     _unlocked = get_unlocked_admin_messages()
@@ -1205,7 +1293,7 @@ with col2:
 # ---------- FULL-WIDTH: Match History ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
 st.markdown(f'<div class="section-card-label">Match History — {view_date.isoformat()}</div>', unsafe_allow_html=True)
-data = load_data()
+data = load_data(_uid)
 view_df = data[data["Date"] == view_date].copy()
 
 if not view_df.empty:
@@ -1230,7 +1318,7 @@ if not view_df.empty:
 
     if st.button("Delete selected"):
         if to_delete:
-            delete_entries(to_delete)
+            delete_entries(to_delete, _uid)
             st.success("Deleted selected entries.")
             st.session_state.refresh += 1
         else:
@@ -1250,7 +1338,7 @@ if view_mode == "Last 7 days":
     _dates_range, _totals_range = get_history_aggregated(data)
     _chart_dates = [d.isoformat() for d in _dates_range]
     _water_vals = _totals_range
-    _mood_rows = load_moods()
+    _mood_rows = load_moods(_uid)
     _mood_map = {str(r["date"]): r["mood_score"] for _, r in _mood_rows.iterrows()} if not _mood_rows.empty else {}
     _mood_vals = [_mood_map.get(d) for d in _chart_dates]
     _label_angle = 0
@@ -1268,7 +1356,7 @@ else:
     _month_dates = [date(_rc_year, _rc_month, d) for d in range(1, _dim + 1)]
     _chart_dates = [d.isoformat() for d in _month_dates]
     _water_vals = [get_daily_total(data, d) for d in _month_dates]
-    _mmdf = get_monthly_mood(load_moods(), _rc_year, _rc_month)
+    _mmdf = get_monthly_mood(load_moods(_uid), _rc_year, _rc_month)
     _mood_map = {str(r["date"]): r["mood_score"] for _, r in _mmdf.iterrows()} if not _mmdf.empty else {}
     _mood_vals = [_mood_map.get(d) for d in _chart_dates]
     _label_angle = -45
@@ -1377,7 +1465,7 @@ with holt_col:
     st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
 
 # Report card — uses the selected month/year from the chart toggle above
-report = get_report_card(data, load_moods(), _rc_year, _rc_month)
+report = get_report_card(data, load_moods(_uid), _rc_year, _rc_month)
 if report:
     st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-card-label">Report Card — {datetime(_rc_year, _rc_month, 1).strftime('%B %Y')}</div>', unsafe_allow_html=True)
@@ -1430,7 +1518,34 @@ for idx, badge in enumerate(BADGES):
 # Raw data toggle
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
 if st.checkbox("Show raw data (DB)"):
-    st.dataframe(load_data(), use_container_width=True)
+    st.dataframe(load_data(_uid), use_container_width=True)
+
+# ---------- LEADERBOARD ----------
+st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-card-label">Head to Head</div>', unsafe_allow_html=True)
+
+_lb_cols = st.columns(2)
+for _i, (_luid, _ludata) in enumerate(USERS.items()):
+    _ldata = load_data(_luid)
+    _lstats = get_stats(_ldata)
+    _lrank = get_rank(_lstats["current_streak"])
+    _lcolor = _ludata["color"]
+    _lbg, _lac = RANK_COLORS.get(_lrank, ("#2a0a0a", _lcolor))
+    _is_you = _luid == _uid
+    with _lb_cols[_i]:
+        st.markdown(f"""
+        <div class="streak-box" style="background:linear-gradient(135deg,{_lbg} 0%,#0A0A0A 100%);
+             border-color:{_lcolor}; box-shadow:0 6px 18px {_lcolor}33;">
+            <div class="streak-label" style="color:{_lcolor};">
+                {_ludata['name']} {'· you' if _is_you else ''}
+            </div>
+            <div class="big" style="color:{_lcolor};">{_lstats['current_streak']}d streak</div>
+            <div class="rank-sub" style="color:{_lcolor};">{_lrank}</div>
+            <div class="rank-sub" style="color:#8A8070; margin-top:4px;">
+                {_lstats['lifetime_ml'] // 1000}L lifetime · {_lstats['days_hit_goal']} goal days
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ---------- ADMIN PANEL (hidden, password-gated) ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
