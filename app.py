@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import sqlalchemy as sa
-import os
 import random
 from datetime import datetime, date, timedelta
 import pytz
@@ -18,8 +17,6 @@ st.markdown("""
 <link rel="manifest" href="manifest.json">
 """, unsafe_allow_html=True)
 
-DB_FILE = "data.db"
-OLD_CSV_FILE = "data.csv"
 DAILY_GOAL = 2000  # ml
 HISTORY_DAYS = 7
 TZ = pytz.timezone("Asia/Muscat")  # Oman (UTC+4)
@@ -178,7 +175,7 @@ BADGES = [
 def get_engine():
     if "postgres" in st.secrets:
         return sa.create_engine(st.secrets["postgres"]["url"], pool_pre_ping=True)
-    return sa.create_engine(f"sqlite:///{DB_FILE}")
+    return sa.create_engine("sqlite:///data.db")
 
 
 ENGINE = get_engine()
@@ -258,21 +255,6 @@ def init_db():
                 except Exception:
                     pass
 
-    if os.path.exists(OLD_CSV_FILE):
-        with ENGINE.begin() as conn:
-            count = conn.execute(sa.text("SELECT COUNT(*) FROM entries")).scalar()
-            if count == 0:
-                try:
-                    old_df = pd.read_csv(OLD_CSV_FILE)
-                    if {"Date", "Time", "Amount (ml)"}.issubset(old_df.columns):
-                        for _, row in old_df.iterrows():
-                            conn.execute(
-                                sa.text("INSERT INTO entries (date, time, amount_ml) VALUES (:d, :t, :a)"),
-                                {"d": str(row["Date"]), "t": str(row["Time"]), "a": int(row["Amount (ml)"])}
-                            )
-                    os.rename(OLD_CSV_FILE, OLD_CSV_FILE + ".migrated.bak")
-                except Exception:
-                    pass
 
 
 def load_data(user_id="1"):
@@ -559,8 +541,8 @@ ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
 # ---------- USERS ----------
 # Names and PINs — PINs stored here for simplicity, change before going live
 USERS = {
-    "1": {"name": "Cat",   "pin": "1234", "color": "#FF4655"},
-    "2": {"name": "Dog", "pin": "5678", "color": "#4FC3F7"},
+    "1": {"name": "Hana",   "pin": "1234", "color": "#FF4655"},
+    "2": {"name": "Farhan", "pin": "5678", "color": "#4FC3F7"},
 }
 
 def save_admin_message(deliver_date, message):
@@ -737,7 +719,7 @@ if st.session_state.user_id is None:
     st.markdown('<div class="login-sub">Identify yourself, Agent.</div>', unsafe_allow_html=True)
 
     for uid, udata in USERS.items():
-        with st.expander(f"{udata['name']}"):
+        with st.expander(f"I'm {udata['name']}"):
             pin_input = st.text_input("PIN", type="password", key=f"pin_{uid}", placeholder="Enter your PIN")
             if st.button(f"Enter as {udata['name']}", key=f"login_{uid}"):
                 if pin_input == udata["pin"]:
@@ -1264,10 +1246,12 @@ with col2:
     def _extract_notes(df, author_name, author_color):
         if df.empty:
             return pd.DataFrame()
+        _cutoff = date.today() - timedelta(days=3)
         filtered = df[
             df["note"].notna() &
             (df["note"].astype(str).str.strip() != "") &
-            (df["note"].astype(str) != "None")
+            (df["note"].astype(str) != "None") &
+            (df["date"] >= _cutoff)
         ].copy()
         filtered["_author"] = author_name
         filtered["_author_color"] = author_color
@@ -1372,7 +1356,7 @@ else:
     _month_dates = [date(_rc_year, _rc_month, d) for d in range(1, _dim + 1)]
     _chart_dates = [d.isoformat() for d in _month_dates]
     _water_vals = [get_daily_total(data, d) for d in _month_dates]
-    _mmdf = get_monthly_mood(load_moods(), _rc_year, _rc_month)
+    _mmdf = get_monthly_mood(load_moods(_uid), _rc_year, _rc_month)
     _mood_map = {str(r["date"]): r["mood_score"] for _, r in _mmdf.iterrows()} if not _mmdf.empty else {}
     _mood_vals = [_mood_map.get(d) for d in _chart_dates]
     _label_angle = -45
@@ -1481,7 +1465,7 @@ with holt_col:
     st.markdown(f"<div class='custom-box'>{msg['message']}</div>", unsafe_allow_html=True)
 
 # Report card — uses the selected month/year from the chart toggle above
-report = get_report_card(data, load_moods(), _rc_year, _rc_month)
+report = get_report_card(data, load_moods(_uid), _rc_year, _rc_month)
 if report:
     st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-card-label">Report Card — {datetime(_rc_year, _rc_month, 1).strftime('%B %Y')}</div>', unsafe_allow_html=True)
@@ -1534,7 +1518,7 @@ for idx, badge in enumerate(BADGES):
 # Raw data toggle
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
 if st.checkbox("Show raw data (DB)"):
-    st.dataframe(load_data(), use_container_width=True)
+    st.dataframe(load_data(_uid), use_container_width=True)
 
 # ---------- LEADERBOARD ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
