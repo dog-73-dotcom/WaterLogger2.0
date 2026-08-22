@@ -541,8 +541,8 @@ ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
 # ---------- USERS ----------
 # Names and PINs — PINs stored here for simplicity, change before going live
 USERS = {
-    "1": {"name": "Cat",   "pin": "1234", "color": "#FF4655"},
-    "2": {"name": "Dog", "pin": "5678", "color": "#4FC3F7"},
+    "1": {"name": "Cat",   "pin": "9989", "color": "#FF4655"},
+    "2": {"name": "Dog", "pin": "0108", "color": "#4FC3F7"},
 }
 
 def save_admin_message(deliver_date, message):
