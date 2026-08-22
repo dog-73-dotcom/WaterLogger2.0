@@ -1354,50 +1354,65 @@ else:
     _label_angle = -45
 
 # Build data for both users
-_chart_rows = []
-for _cu, _cu_data in USERS.items():
-    _cu_df = load_data(_cu)
-    _cu_mood_df = load_moods(_cu)
-    _cu_mood_map = {str(r["date"]): r["mood_score"] for _, r in _cu_mood_df.iterrows()} if not _cu_mood_df.empty else {}
-    for _d in _chart_dates:
-        _d_date = date.fromisoformat(_d)
-        _w = get_daily_total(_cu_df, _d_date)
-        _pct = min(_w / DAILY_GOAL, 1.0)
-        _chart_rows.append({
-            "date": _d,
-            "user": _cu_data["name"],
-            "water_ml": _w,
-            "pct": round(_pct, 3),
-            "mood": _cu_mood_map.get(_d),
-        })
+_cat_data = load_data("1")
+_dog_data = load_data("2")
+_cat_mood_df = load_moods("1")
+_dog_mood_df = load_moods("2")
+_cat_mood_map = {str(r["date"]): r["mood_score"] for _, r in _cat_mood_df.iterrows()} if not _cat_mood_df.empty else {}
+_dog_mood_map = {str(r["date"]): r["mood_score"] for _, r in _dog_mood_df.iterrows()} if not _dog_mood_df.empty else {}
 
-_comp_df = pd.DataFrame(_chart_rows)
-_y_max = max(DAILY_GOAL, int(_comp_df["water_ml"].max()) if not _comp_df.empty else 0)
+# Build stacked bar rows: one "shared" base + one "extra" top per day
+_stack_rows = []
+_mood_rows_chart = []
+for _d in _chart_dates:
+    _d_date = date.fromisoformat(_d)
+    _cat_ml = get_daily_total(_cat_data, _d_date)
+    _dog_ml = get_daily_total(_dog_data, _d_date)
+    _shared = min(_cat_ml, _dog_ml)
+    _extra = abs(_cat_ml - _dog_ml)
+    _winner = "Cat" if _cat_ml >= _dog_ml else "Dog"
+    _winner_color = "#FF4655" if _winner == "Cat" else "#4FC3F7"
 
-# Grouped bars — one group per date, one bar per user
-# Color encodes % of goal: 0=red, 0.5=orange/yellow, 1+=green
-_color_scale = alt.Scale(
-    domain=[0, 0.25, 0.5, 0.75, 1.0],
-    range=["#ff4655", "#ff7a3d", "#ffd23d", "#a8e06a", "#3ddc6f"]
+    _stack_rows.append({"date": _d, "portion": "shared", "amount": _shared, "color": "#3a3a3a", "label": f"Both: {_shared}ml"})
+    if _extra > 0:
+        _stack_rows.append({"date": _d, "portion": _winner, "amount": _extra, "color": _winner_color, "label": f"{_winner} extra: {_extra}ml"})
+
+    # Mood rows for both
+    for _mu, _mmap, _mc in [("Cat", _cat_mood_map, "#FF4655"), ("Dog", _dog_mood_map, "#4FC3F7")]:
+        if _d in _mmap:
+            _mood_rows_chart.append({"date": _d, "user": _mu, "mood": _mmap[_d], "color": _mc})
+
+_stack_df = pd.DataFrame(_stack_rows)
+_y_max = max(DAILY_GOAL, int(_stack_df.groupby("date")["amount"].sum().max()) if not _stack_df.empty else 0)
+
+# Stacked bars — shared base + winner's extra on top
+_color_scale_stack = alt.Scale(
+    domain=["shared", "Cat", "Dog"],
+    range=["#2e2e2e", "#FF4655", "#4FC3F7"]
 )
 
 _bars = (
-    alt.Chart(_comp_df)
+    alt.Chart(_stack_df)
     .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
     .encode(
         x=alt.X("date:N", sort=None, title=None,
                 axis=alt.Axis(labelColor="#FFF6E0", labelAngle=_label_angle, labelFontSize=10)),
-        xOffset=alt.XOffset("user:N"),
-        y=alt.Y("water_ml:Q", title="ml",
+        y=alt.Y("amount:Q", title="ml", stack="zero",
                 scale=alt.Scale(domain=[0, _y_max]),
                 axis=alt.Axis(labelColor="#8A8070", titleColor="#8A8070",
                               titleAngle=0, titleAlign="right", titleX=-8, titleY=-8)),
-        color=alt.Color("pct:Q", scale=_color_scale, legend=None),
+        color=alt.Color("portion:N", scale=_color_scale_stack, legend=alt.Legend(
+            title="",
+            labelColor="#FFF6E0",
+            fillColor="#141414",
+            strokeColor="rgba(255,255,255,0.1)",
+            padding=6, cornerRadius=4,
+            orient="top-left",
+        )),
+        order=alt.Order("portion:N", sort="ascending"),
         tooltip=[
-            alt.Tooltip("user:N", title="User"),
             alt.Tooltip("date:N", title="Date"),
-            alt.Tooltip("water_ml:Q", title="Water (ml)"),
-            alt.Tooltip("pct:Q", title="Goal %", format=".0%"),
+            alt.Tooltip("label:N", title=""),
         ]
     )
 )
@@ -1413,10 +1428,10 @@ _goal_line = (
     )
 )
 
-# Mood lines — one per user, right axis
-_mood_df = _comp_df.dropna(subset=["mood"]).copy()
+# Mood lines per user — right axis
+_mood_chart_df = pd.DataFrame(_mood_rows_chart) if _mood_rows_chart else pd.DataFrame()
 _mood_lines = (
-    alt.Chart(_mood_df)
+    alt.Chart(_mood_chart_df)
     .mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=50, filled=True))
     .encode(
         x=alt.X("date:N", sort=None),
@@ -1427,21 +1442,13 @@ _mood_lines = (
                               titleAlign="left", titleX=8, titleY=-8,
                               labelPadding=4, tickCount=9)),
         color=alt.Color("user:N",
-                        scale=alt.Scale(
-                            domain=["Cat", "Dog"],
-                            range=["#FF4655", "#4FC3F7"]
-                        ),
-                        legend=alt.Legend(
-                            title="User", orient="top-right",
-                            labelColor="#FFF6E0", titleColor="#8A8070",
-                            fillColor="#141414", strokeColor="#FF4655",
-                            padding=6, cornerRadius=4
-                        )),
+                        scale=alt.Scale(domain=["Cat", "Dog"], range=["#FF4655", "#4FC3F7"]),
+                        legend=None),
         strokeDash=alt.StrokeDash("user:N",
                                    scale=alt.Scale(domain=["Cat", "Dog"],
-                                                   range=[[1,0],[4,2]])),
+                                                   range=[[1, 0], [4, 2]])),
     )
-)
+) if not _mood_chart_df.empty else alt.Chart(pd.DataFrame({"date": [], "mood": []})).mark_line()
 
 _comp_chart = (
     alt.layer(_bars, _goal_line, _mood_lines)
@@ -1451,7 +1458,7 @@ _comp_chart = (
     .configure_axis(grid=True, gridColor="#1e1e1e")
 )
 st.altair_chart(_comp_chart, use_container_width=True)
-st.caption("Bars = water intake, color red→green by % of goal · Lines = mood 1–10 (right axis) · Dashed = daily goal")
+st.caption("Bar = combined intake · Dark base = shared amount · Colored top = who drank more · Lines = mood")
 
 # ---------- Intel Briefing + Captain Holt's Briefing, side by side ----------
 st.markdown('<div class="divider"><div class="divider-diamond"></div></div>', unsafe_allow_html=True)
