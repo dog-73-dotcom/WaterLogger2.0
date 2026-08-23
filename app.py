@@ -322,18 +322,14 @@ MOOD_COLORS = {
 def save_mood(target_date, mood_label, note="", user_id="1"):
     score = MOOD_OPTIONS[mood_label]
     with ENGINE.begin() as conn:
-        if IS_POSTGRES:
-            conn.execute(sa.text("""
-                INSERT INTO moods (date, mood_score, mood_label, note, user_id)
-                VALUES (:d, :s, :l, :n, :uid)
-                ON CONFLICT (date, user_id) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
-            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note, "uid": user_id})
-        else:
-            conn.execute(sa.text("""
-                INSERT INTO moods (date, mood_score, mood_label, note, user_id)
-                VALUES (:d, :s, :l, :n, :uid)
-                ON CONFLICT(date, user_id) DO UPDATE SET mood_score=:s, mood_label=:l, note=:n
-            """), {"d": str(target_date), "s": score, "l": mood_label, "n": note, "uid": user_id})
+        # Delete existing entry for this date+user first, then insert fresh
+        # This avoids ON CONFLICT issues from old single-column UNIQUE(date) constraints
+        conn.execute(sa.text(
+            "DELETE FROM moods WHERE date = :d AND user_id = :uid"
+        ), {"d": str(target_date), "uid": user_id})
+        conn.execute(sa.text(
+            "INSERT INTO moods (date, mood_score, mood_label, note, user_id) VALUES (:d, :s, :l, :n, :uid)"
+        ), {"d": str(target_date), "s": score, "l": mood_label, "n": note, "uid": user_id})
 
 
 def load_moods(user_id="1"):
@@ -540,8 +536,8 @@ ADMIN_PASSWORD = "hydrAgent2025"  # change this before gifting
 
 # ---------- USERS ----------
 USERS = {
-    "1": {"name": "Cat",   "pin": "9989", "color": "#FF4655"},
-    "2": {"name": "Dog", "pin": "0108", "color": "#4FC3F7"},
+    "1": {"name": "Cat", "color": "#FF4655"},
+    "2": {"name": "Dog", "color": "#4FC3F7"},
 }
 
 def save_admin_message(deliver_date, message):
@@ -1373,9 +1369,9 @@ for _d in _chart_dates:
     _winner = "Cat" if _cat_ml >= _dog_ml else "Dog"
     _winner_color = "#FF4655" if _winner == "Cat" else "#4FC3F7"
 
-    _stack_rows.append({"date": _d, "portion": "shared", "amount": _shared, "color": "#3a3a3a", "label": f"Both: {_shared}ml"})
+    _stack_rows.append({"date": _d, "portion": "shared", "amount": _shared, "color": "#3a3a3a", "label": f"Both: {_shared}ml", "sort_order": 0})
     if _extra > 0:
-        _stack_rows.append({"date": _d, "portion": _winner, "amount": _extra, "color": _winner_color, "label": f"{_winner} extra: {_extra}ml"})
+        _stack_rows.append({"date": _d, "portion": _winner, "amount": _extra, "color": _winner_color, "label": f"{_winner} extra: {_extra}ml", "sort_order": 1})
 
     # Mood rows for both
     for _mu, _mmap, _mc in [("Cat", _cat_mood_map, "#FF4655"), ("Dog", _dog_mood_map, "#4FC3F7")]:
@@ -1409,7 +1405,7 @@ _bars = (
             padding=6, cornerRadius=4,
             orient="top-left",
         )),
-        order=alt.Order("portion:N", sort="ascending"),
+        order=alt.Order("sort_order:Q", sort="ascending"),
         tooltip=[
             alt.Tooltip("date:N", title="Date"),
             alt.Tooltip("label:N", title=""),
