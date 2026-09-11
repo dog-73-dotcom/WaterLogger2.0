@@ -217,9 +217,10 @@ def init_db():
             # Safely add user_id to existing tables if missing
             for tbl in ["entries", "moods"]:
                 try:
-                    conn.execute(sa.text(f"ALTER TABLE {tbl} ADD COLUMN user_id TEXT NOT NULL DEFAULT '1'"))
+                    with ENGINE.begin() as _ac:
+                        _ac.execute(sa.text(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '1'"))
                 except Exception:
-                    pass  # column already exists
+                    pass
         else:
             conn.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS entries (
@@ -251,7 +252,8 @@ def init_db():
             """))
             for tbl in ["entries", "moods"]:
                 try:
-                    conn.execute(sa.text(f"ALTER TABLE {tbl} ADD COLUMN user_id TEXT NOT NULL DEFAULT '1'"))
+                    with ENGINE.begin() as _ac:
+                        _ac.execute(sa.text(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '1'"))
                 except Exception:
                     pass
 
