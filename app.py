@@ -174,7 +174,10 @@ BADGES = [
 @st.cache_resource
 def get_engine():
     if "postgres" in st.secrets:
-        return sa.create_engine(st.secrets["postgres"]["url"], pool_pre_ping=True)
+        url = st.secrets["postgres"]["url"]
+        # Force psycopg2 driver — SQLAlchemy 2.x defaults to psycopg3 otherwise
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return sa.create_engine(url, pool_pre_ping=True)
     return sa.create_engine("sqlite:///data.db")
 
 
